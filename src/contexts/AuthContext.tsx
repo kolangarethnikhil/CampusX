@@ -64,8 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      alert(`Sign in failed: ${error.message}\nIf you deployed this, ensure the domain is added to Firebase Auth Authorized Domains.`);
+    }
   };
 
   const logout = () => signOut(auth);
