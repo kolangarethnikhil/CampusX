@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0F172A" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/vite.svg" />
+    <title>KJC Connect • Premium Campus Exchange</title>
+    <script>
+      // Protection against libraries trying to overwrite fetch (e.g. TypeError: Cannot set property fetch)
+      (function() {
+        try {
+          const descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (descriptor && !descriptor.set) {
+            const originalFetch = window.fetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return originalFetch; },
+              set: function(v) { 
+                console.warn('Blocked attempt to overwrite window.fetch. Using original implementation.');
+              },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {
+          // Handle cases where window.fetch is not configurable
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

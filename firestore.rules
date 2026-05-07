@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { 
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verifiedStatus == 'verified';
+    }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid; // Secure list queries
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'course', 'batch', 'verifiedStatus', 'collegeEmail'])
+      );
+
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email', 'campusRole']) &&
+               data.uid == request.auth.uid &&
+               data.email is string &&
+               data.campusRole in ['Student', 'Alumni', 'Landlord', 'Seller'];
+      }
+    }
+
+    // Housing Listings Rules
+    match /housing_listings/{listingId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidHousingListing(incoming()) && incoming().postedBy == request.auth.uid;
+      allow update: if isVerified() && isOwner(existing().postedBy) && isValidHousingListing(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'rent', 'deposit', 'status', 'photos', 'availableFrom', 'description'])
+      );
+      allow delete: if isVerified() && isOwner(existing().postedBy);
+
+      function isValidHousingListing(data) {
+        return data.keys().hasAll(['title', 'roomType', 'rent', 'postedBy', 'status', 'description', 'latitude', 'longitude', 'formattedAddress']) &&
+               data.title is string && data.title.size() <= 100 &&
+               data.description is string && data.description.size() <= 2000 &&
+               data.roomType in ['single', 'shared', '1BHK', '2BHK', 'PG'] &&
+               data.rent is number &&
+               data.latitude is number &&
+               data.longitude is number &&
+               data.formattedAddress is string &&
+               data.postedBy == request.auth.uid &&
+               data.status in ['available', 'reserved', 'closed'];
+      }
+    }
+
+    // Marketplace Listings Rules
+    match /marketplace_listings/{listingId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidMarketplaceListing(incoming()) && incoming().postedBy == request.auth.uid;
+      allow update: if isVerified() && isOwner(existing().postedBy) && isValidMarketplaceListing(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'price', 'status', 'photos', 'condition', 'description'])
+      );
+      allow delete: if isVerified() && isOwner(existing().postedBy);
+
+      function isValidMarketplaceListing(data) {
+        return data.keys().hasAll(['title', 'category', 'price', 'postedBy', 'status', 'description', 'latitude', 'longitude', 'formattedAddress']) &&
+               data.title is string && data.title.size() <= 100 &&
+               data.description is string && data.description.size() <= 2000 &&
+               data.category in ['Furniture', 'Electronics', 'Books', 'Essentials', 'Other'] &&
+               data.price is number &&
+               data.latitude is number &&
+               data.longitude is number &&
+               data.formattedAddress is string &&
+               data.postedBy == request.auth.uid &&
+               data.status in ['available', 'reserved', 'sold'];
+      }
+    }
+
+    // Saved Listings Rules
+    match /saved_listings/{savedId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && isValidSavedListing(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      function isValidSavedListing(data) {
+        return data.keys().hasAll(['userId', 'listingId', 'listingType', 'createdAt']) &&
+               data.userId == request.auth.uid &&
+               data.listingId is string &&
+               data.listingType in ['housing', 'market'];
+      }
+    }
+
+    // Conversations Rules
+    match /conversations/{conversationId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && request.auth.uid in incoming().participants;
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt'])
+      );
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+                       incoming().senderId == request.auth.uid &&
+                       incoming().content is string && incoming().content.size() <= 1000;
+      }
+    }
+  }
+}

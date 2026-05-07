@@ -1,0 +1,80 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&family=JetBrains+Mono:wght@500;700&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", var(--font-sans);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-kjc-navy: #0F172A;
+  --color-kjc-accent: #8B5CF6; /* Vibrant Violet */
+  --color-kjc-black: #020617; /* Obsidian */
+  --color-kjc-paper: #020617; /* Dark background */
+  --color-kjc-slate-50: rgba(255, 255, 255, 0.03);
+  --color-kjc-slate-100: rgba(255, 255, 255, 0.08);
+  --color-kjc-slate-200: rgba(255, 255, 255, 0.15);
+  --color-kjc-slate-800: #1E293B;
+  --color-kjc-slate-900: #FFFFFF;
+  
+  --shadow-pro: 0 10px 40px -10px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(139, 92, 246, 0.1);
+  --shadow-pro-lg: 0 30px 60px -12px rgba(0, 0, 0, 0.6);
+  --shadow-inner-pro: inset 0 2px 4px 0 rgba(255, 255, 255, 0.02);
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-white bg-kjc-black selection:bg-kjc-accent/30;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+  
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight font-black;
+  }
+}
+
+@layer components {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .glass-header {
+    @apply sticky top-0 z-50 bg-kjc-black/40 backdrop-blur-3xl border-b border-white/5;
+  }
+  
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-pro;
+  }
+  
+  .bento-card {
+    @apply bg-kjc-slate-50 border border-white/5 rounded-[40px] p-5 sm:p-8 transition-all duration-500 hover:shadow-pro-lg hover:border-white/10 overflow-hidden relative;
+  }
+  
+  .pro-badge {
+    @apply inline-flex items-center px-4 py-1.5 rounded-[12px] text-[10px] font-bold uppercase tracking-[0.1em] leading-none;
+  }
+
+  .price-font {
+    @apply font-mono font-black tracking-tighter text-white;
+  }
+  
+  .pro-heading {
+    @apply text-white font-display font-black tracking-tighter leading-tight;
+  }
+
+  .input-pro {
+    @apply w-full bg-white/5 border border-white/10 rounded-[28px] px-8 py-5 outline-none transition-all placeholder:text-white/20 font-medium text-base focus:border-kjc-accent/50 focus:bg-white/10 text-white;
+  }
+  
+  .atmo-bg {
+    background: 
+      radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.15) 0%, transparent 60%),
+      radial-gradient(circle at 10% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+  }
+}
+
