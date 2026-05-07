@@ -1,14 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import {
-  User,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-} from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { User, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { auth, db } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface UserProfile {
   uid: string;
@@ -16,8 +9,8 @@ interface UserProfile {
   displayName: string;
   photoURL: string;
   collegeEmail?: string;
-  campusRole: "Student" | "Alumni" | "Landlord" | "Seller";
-  verifiedStatus: "unverified" | "pending" | "verified";
+  campusRole: 'Student' | 'Alumni' | 'Landlord' | 'Seller';
+  verifiedStatus: 'unverified' | 'pending' | 'verified';
   batch?: string;
   course?: string;
   bio?: string;
@@ -40,108 +33,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
-
-      try {
-        setUser(currentUser);
-
-        if (!currentUser) {
-          setProfile(null);
-          return;
-        }
-
-        const docRef = doc(db, "users", currentUser.uid);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setUser(user);
+      if (user) {
+        const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
-
+        
         if (docSnap.exists()) {
           setProfile(docSnap.data() as UserProfile);
-          return;
+        } else {
+          // New user initial profile
+          const newProfile: UserProfile = {
+            uid: user.uid,
+            email: user.email || '',
+            displayName: user.displayName || 'KJC Student',
+            photoURL: user.photoURL || '',
+            campusRole: 'Student',
+            verifiedStatus: 'unverified',
+          };
+          await setDoc(docRef, { ...newProfile, createdAt: serverTimestamp() });
+          setProfile(newProfile);
         }
-
-        const newProfile: UserProfile = {
-          uid: currentUser.uid,
-          email: currentUser.email || "",
-          displayName: currentUser.displayName || "KJC Student",
-          photoURL: currentUser.photoURL || "",
-          campusRole: "Student",
-          verifiedStatus: "unverified",
-        };
-
-        await setDoc(docRef, {
-          ...newProfile,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        setProfile(newProfile);
-      } catch (error) {
-        console.error("Auth state/profile load failed:", error);
+      } else {
         setProfile(null);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
   const signIn = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-
     try {
+      const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error("Google sign-in popup failed:", {
-        code: error.code,
-        message: error.message,
-      });
-
-      if (
-        error.code === "auth/popup-blocked" ||
-        error.code === "auth/popup-closed-by-user" ||
-        error.code === "auth/cancelled-popup-request"
-      ) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-
-      alert(
-        error.code === "auth/unauthorized-domain"
-          ? "This domain is not authorized in Firebase Auth. Add it in Firebase Console > Authentication > Settings > Authorized domains."
-          : error.message || "Google sign-in failed."
-      );
+      console.error('Sign in error:', error);
+      alert(`Sign in failed: ${error.message}\nIf you deployed this, ensure the domain is added to Firebase Auth Authorized Domains.`);
     }
   };
 
-  const logout = async () => {
-    await signOut(auth);
-    setUser(null);
-    setProfile(null);
-  };
+  const logout = () => signOut(auth);
 
   const updateProfile = async (data: Partial<UserProfile>) => {
-    if (!user) throw new Error("User not authenticated");
-
-    const docRef = doc(db, "users", user.uid);
-
-    await setDoc(
-      docRef,
-      {
-        ...data,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    setProfile((prev) => (prev ? { ...prev, ...data } : prev));
+    if (!user) return;
+    const docRef = doc(db, 'users', user.uid);
+    await setDoc(docRef, data, { merge: true });
+    setProfile(prev => prev ? { ...prev, ...data } : null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, profile, loading, signIn, logout, updateProfile }}
-    >
+    <AuthContext.Provider value={{ user, profile, loading, signIn, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -149,10 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-
   return context;
 }
