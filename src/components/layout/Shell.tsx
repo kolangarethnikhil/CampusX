@@ -158,7 +158,7 @@ const ListingCard: React.FC<{
 }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, signIn } = useAuth();
 
   useEffect(() => {
     checkSaved();
@@ -174,6 +174,10 @@ const ListingCard: React.FC<{
 
   const handleToggleSave = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!user) {
+      await signIn();
+      return;
+    }
     if (isSaved && saveId) {
       await unsaveListing(saveId);
       setIsSaved(false);
@@ -777,30 +781,43 @@ export default function Shell() {
 
   const loadData = async () => {
     setLoading(true);
-    if (activeTab === 'rooms') {
-      const data = await getHousingListings();
-      setHousingData(data);
-    } else if (activeTab === 'market') {
-      const data = await getMarketListings();
-      setMarketData(data);
-    } else if (activeTab === 'saved') {
-      const saved = await getSavedListings();
-      const allHousing = await getHousingListings();
-      const allMarket = await getMarketListings();
-      
-      const merged = saved.map(s => {
-        const item = s.listingType === 'housing' 
-          ? allHousing.find(h => h.id === s.listingId)
-          : allMarket.find(m => m.id === s.listingId);
-        return item ? { ...item, savedId: s.id, listingType: s.listingType } : null;
-      }).filter(Boolean);
-      
-      setSavedData(merged);
+    try {
+      if (activeTab === 'rooms') {
+        const data = await getHousingListings();
+        setHousingData(data);
+      } else if (activeTab === 'market') {
+        const data = await getMarketListings();
+        setMarketData(data);
+      } else if (activeTab === 'saved') {
+        if (!user) {
+          setSavedData([]);
+          setLoading(false);
+          return;
+        }
+        const saved = await getSavedListings();
+        const allHousing = await getHousingListings();
+        const allMarket = await getMarketListings();
+        
+        const merged = saved.map(s => {
+          const item = s.listingType === 'housing' 
+            ? allHousing.find(h => h.id === s.listingId)
+            : allMarket.find(m => m.id === s.listingId);
+          return item ? { ...item, savedId: s.id, listingType: s.listingType } : null;
+        }).filter(Boolean);
+        
+        setSavedData(merged);
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
     }
     setLoading(false);
   };
 
   const handleContact = async (ownerId: string, listingId: string, title: string, type: string) => {
+    if (!user) {
+      await signIn();
+      return;
+    }
     try {
       const convId = await startConversation(ownerId, listingId, title, type);
       setActiveTab('messages');
@@ -829,62 +846,30 @@ export default function Shell() {
     );
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-kjc-black flex items-center justify-center p-8 text-white overflow-hidden relative font-sans">
-        {/* Animated Background Orbs */}
-        <div className="absolute top-[-20%] right-[-10%] w-[80%] aspect-square bg-kjc-accent/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[80%] aspect-square bg-blue-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-        
-        <div className="max-w-sm w-full text-center relative z-10">
-          <motion.div 
-            initial={{ scale: 0.5, opacity: 0, rotate: -20 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            className="w-24 h-24 bg-gradient-to-br from-kjc-accent to-blue-600 rounded-[36px] mx-auto mb-10 flex items-center justify-center text-white shadow-[0_20px_50px_rgba(139,92,246,0.3)] ring-1 ring-white/20"
-          >
+  const renderLoginPrompt = () => (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-white relative font-sans">
+      <div className="absolute top-[-10%] right-[-10%] w-[80%] max-w-sm aspect-square bg-kjc-accent/20 rounded-full blur-[120px] animate-pulse" />
+      
+      <div className="max-w-sm w-full text-center relative z-10 space-y-10">
+        <div className="space-y-4">
+          <div className="w-24 h-24 bg-gradient-to-br from-kjc-accent to-blue-600 rounded-[36px] mx-auto mb-6 flex items-center justify-center text-white shadow-[0_20px_50px_rgba(139,92,246,0.3)] ring-1 ring-white/20">
             <span className="text-4xl font-black">K</span>
-          </motion.div>
-          <motion.h1 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="text-5xl font-display mb-4 tracking-tighter"
-          >
-            Campus<span className="text-kjc-accent italic">X</span>
-          </motion.h1>
-          <motion.p 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="text-slate-400 mb-12 text-[10px] leading-relaxed px-8 font-black uppercase tracking-[0.4em] opacity-80"
-          >
-            Kristu Jayanti College • Trusted Exchange
-          </motion.p>
-          <motion.button 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            onClick={signIn}
-            className="w-full bg-white text-kjc-black py-6 rounded-[32px] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-4 hover:bg-kjc-slate-50 active:scale-[0.96] transition-all shadow-pro-lg relative overflow-hidden group"
-          >
-            Sign in with Campus Mail
-          </motion.button>
-          
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-12 flex justify-center items-center gap-3 opacity-40"
-          >
-            <span className="w-8 h-[0.5px] bg-white" />
-            <p className="text-[9px] text-white font-black uppercase tracking-[0.3em]">
-              KJC CONNECT 2024
-            </p>
-            <span className="w-8 h-[0.5px] bg-white" />
-          </motion.div>
+          </div>
+          <h2 className="text-4xl font-display tracking-tighter block mb-2">Auth <span className="text-kjc-accent italic">Required</span></h2>
+          <p className="text-slate-400 text-[10px] leading-relaxed font-black uppercase tracking-[0.4em] opacity-80 block">
+             Kristu Jayanti College
+          </p>
         </div>
+        
+        <button 
+          onClick={signIn}
+          className="w-full bg-white text-kjc-black py-6 rounded-[32px] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-4 hover:bg-kjc-slate-50 active:scale-[0.96] transition-all shadow-pro-lg relative overflow-hidden group"
+        >
+          Sign in with Campus Mail
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-kjc-black pb-32 atmo-bg">
@@ -947,7 +932,10 @@ export default function Shell() {
                 setShowFilters={setShowFilters}
               />
             )}
-            {activeTab === 'saved' && (
+            
+            {(!user && ['saved', 'messages', 'profile'].includes(activeTab)) ? renderLoginPrompt() : (
+              <>
+                {activeTab === 'saved' && (
               <div className="space-y-8">
                 <div className="flex flex-col gap-1 mb-4">
                   <h2 className="text-4xl pro-heading tracking-tighter uppercase whitespace-nowrap">
@@ -1042,11 +1030,23 @@ export default function Shell() {
                 </div>
               </div>
             )}
+              </>
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
       
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} onAddClick={() => setIsModalOpen(true)} />
+      <BottomNav 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        onAddClick={() => {
+          if (!user) {
+            signIn();
+          } else {
+            setIsModalOpen(true);
+          }
+        }} 
+      />
 
       <AnimatePresence>
         {isModalOpen && <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />}

@@ -35,7 +35,7 @@ service cloud.firestore {
 
     // Housing Listings Rules
     match /housing_listings/{listingId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isVerified() && isValidHousingListing(incoming()) && incoming().postedBy == request.auth.uid;
       allow update: if isVerified() && isOwner(existing().postedBy) && isValidHousingListing(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'rent', 'deposit', 'status', 'photos', 'availableFrom', 'description'])
@@ -58,7 +58,7 @@ service cloud.firestore {
 
     // Marketplace Listings Rules
     match /marketplace_listings/{listingId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isVerified() && isValidMarketplaceListing(incoming()) && incoming().postedBy == request.auth.uid;
       allow update: if isVerified() && isOwner(existing().postedBy) && isValidMarketplaceListing(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'price', 'status', 'photos', 'condition', 'description'])
