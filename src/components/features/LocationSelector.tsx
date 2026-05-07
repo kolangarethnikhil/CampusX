@@ -136,6 +136,35 @@ export default function LocationSelector({ onLocationSelect, initialAddress, ini
     }
   }, [map, selectedPlace, marker]);
 
+  const hasMaps = Boolean(process.env.GOOGLE_MAPS_PLATFORM_KEY);
+
+  if (!hasMaps) {
+    return (
+      <div className="space-y-4">
+        <div className="relative group">
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-kjc-accent transition-colors">
+            <MapPin size={20} />
+          </div>
+          <input
+            value={inputValue}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              onLocationSelect({ address: e.target.value, lat: 0, lng: 0 });
+            }}
+            placeholder="Type approximate location (e.g. Near KJC Gate 1)"
+            className="input-pro pl-14"
+          />
+        </div>
+        <div className="p-6 bg-white/5 rounded-[40px] border border-white/5 text-center">
+          <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em]">Precision Mapping Disabled</p>
+          <p className="text-[11px] text-white/20 font-bold mt-2 leading-relaxed uppercase tracking-wider italic">
+            Visual coordinates require an authorized secure key.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="relative flex gap-3">
