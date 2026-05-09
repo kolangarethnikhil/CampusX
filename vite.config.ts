@@ -1,55 +1,77 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
-import { VitePWA } from 'vite-plugin-pwa';
-
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
-  return {
-    plugins: [
-      react(), 
-      tailwindcss(),
-      VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['vite.svg'],
-        manifest: {
-          name: 'KJC Connect',
-          short_name: 'KJC Connect',
-          description: 'The official student community network for Kristu Jayanti College.',
-          theme_color: '#0F172A',
-          background_color: '#F8FAFC',
-          display: 'standalone',
-          orientation: 'portrait',
-          icons: [
-            {
-              src: '/vite.svg',
-              sizes: '192x192',
-              type: 'image/svg+xml'
-            },
-            {
-              src: '/vite.svg',
-              sizes: '512x512',
-              type: 'image/svg+xml'
-            }
-          ]
-        }
-      })
-    ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(env.GOOGLE_MAPS_PLATFORM_KEY),
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: [
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+        "og-image.png",
+      ],
+      manifest: {
+        name: "KJC Connect",
+        short_name: "KJC",
+        description:
+          "Find trusted rooms, flatmates, furniture, and essentials from verified Kristu Jayanti students and alumni.",
+        theme_color: "#0F172A",
+        background_color: "#0F172A",
+        display: "standalone",
+        display_override: ["window-controls-overlay", "standalone"],
+        orientation: "portrait",
+        lang: "en-IN",
+        start_url: "/",
+        scope: "/",
+        categories: ["education", "shopping", "utilities"],
+        icons: [
+          {
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable any",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable any",
+          },
+        ],
+        shortcuts: [
+          {
+            name: "Post Listing",
+            short_name: "Post",
+            url: "/",
+            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Find Housing",
+            short_name: "Rooms",
+            url: "/",
+            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Messages",
+            short_name: "Chat",
+            url: "/",
+            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
+          },
+        ],
       },
+    }),
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "."),
     },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-    },
-  };
+  },
+  server: {
+    hmr: process.env.DISABLE_HMR !== "true",
+  },
 });
