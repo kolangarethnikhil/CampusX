@@ -136,7 +136,7 @@ export default function LocationSelector({ onLocationSelect, initialAddress, ini
     }
   }, [map, selectedPlace, marker]);
 
-  const hasMaps = Boolean(process.env.GOOGLE_MAPS_PLATFORM_KEY);
+  const hasMaps = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
   if (!hasMaps) {
     return (
