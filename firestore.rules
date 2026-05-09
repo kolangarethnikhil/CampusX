@@ -23,34 +23,67 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if signedIn();
-      allow list: if false;
+  allow get: if signedIn();
+  allow list: if false;
 
-      allow create: if isOwner(userId)
-        && incoming().uid == request.auth.uid
-        && incoming().email is string
-        && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
-        && incoming().verifiedStatus in ['unverified', 'pending'];
+  function isKjcAuthEmail() {
+    return request.auth.token.email is string
+      && (
+        request.auth.token.email.lower().matches('.*@kristujayanti\\.com$') ||
+        request.auth.token.email.lower().matches('.*@kjc\\.edu\\.in$')
+      );
+  }
 
-      allow update: if isOwner(userId)
-        && incoming().uid == existing().uid
-        && incoming().email == existing().email
-        && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
+  allow create: if isOwner(userId)
+    && incoming().uid == request.auth.uid
+    && incoming().email == request.auth.token.email
+    && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
+    && (
+      (
+        isKjcAuthEmail()
+        && incoming().campusRole == 'Student'
+        && incoming().verifiedStatus == 'verified'
+        && incoming().collegeEmail == request.auth.token.email
+      )
+      ||
+      (
+        !isKjcAuthEmail()
         && incoming().verifiedStatus in ['unverified', 'pending']
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'displayName',
-          'photoURL',
-          'bio',
-          'course',
-          'batch',
-          'collegeEmail',
-          'campusRole',
-          'verifiedStatus',
-          'updatedAt'
-        ]);
+      )
+    );
 
-      allow delete: if false;
-    }
+  allow update: if isOwner(userId)
+    && incoming().uid == existing().uid
+    && incoming().email == existing().email
+    && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
+    && incoming().diff(existing()).affectedKeys().hasOnly([
+      'displayName',
+      'photoURL',
+      'bio',
+      'course',
+      'batch',
+      'collegeEmail',
+      'campusRole',
+      'verifiedStatus',
+      'passedOutYear',
+      'currentLocation',
+      'updatedAt'
+    ])
+    && (
+      (
+        isKjcAuthEmail()
+        && incoming().verifiedStatus == 'verified'
+        && incoming().collegeEmail == request.auth.token.email
+      )
+      ||
+      (
+        !isKjcAuthEmail()
+        && incoming().verifiedStatus in ['unverified', 'pending']
+      )
+    );
+
+  allow delete: if false;
+}
 
     match /housing_listings/{listingId} {
       allow read: if true;

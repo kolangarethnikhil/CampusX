@@ -15,12 +15,14 @@ export const saveListing = async (listingId: string, listingType: 'housing' | 'm
   const path = 'saved_listings';
   try {
     const savedRef = collection(db, path);
-    await addDoc(savedRef, {
-      userId: auth.currentUser.uid,
-      listingId,
-      listingType,
-      createdAt: serverTimestamp()
-    });
+    const docRef = await addDoc(savedRef, {
+  userId: auth.currentUser.uid,
+  listingId,
+  listingType,
+  createdAt: serverTimestamp(),
+});
+
+return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

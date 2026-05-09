@@ -20,6 +20,7 @@ export interface Conversation {
   listingType: string;
   lastMessage?: string;
   updatedAt: any;
+  unreadCount?: number;
 }
 
 export interface Message {

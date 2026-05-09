@@ -293,7 +293,7 @@ const ListingCard: React.FC<{
 
         <div className="pt-2">
            <button 
-             onClick={() => onContact(listing.ownerId || (listing as any).postedBy, listing.id!, listing.title, type)}
+             onClick={() => onContact(listing.postedBy, listing.id, listing.title, type)}
              className="w-full bg-kjc-navy text-white py-5 rounded-[28px] font-black uppercase tracking-[0.3em] text-[10px] hover:bg-kjc-accent transition-all flex items-center justify-center gap-3 overflow-hidden group/btn shadow-pro active:scale-[0.98] border border-white/5"
            >
              Secure Channel
@@ -443,10 +443,11 @@ const Chattery = () => {
                 <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-white/40 group-hover:bg-kjc-accent group-hover:text-white transition-all duration-500 shadow-inner">
                   {conv.listingType === 'housing' ? <Home size={28} /> : <ShoppingBag size={28} />}
                 </div>
-                {conv.unreadCount > 0 && (
-                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-kjc-accent border-2 border-kjc-black rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg">
-                    {conv.unreadCount}
-                  </div>
+                {(conv.unreadCount ?? 0) > 0 && (
+  <div className="absolute -top-1 -right-1 w-6 h-6 bg-kjc-accent border-2 border-kjc-black rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg">
+    {conv.unreadCount ?? 0}
+  </div>
+                    
                 )}
               </div>
               <div className="flex-1 text-left min-w-0">
