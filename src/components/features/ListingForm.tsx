@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { motion } from "motion/react";
 import {
   X,
@@ -7,9 +7,11 @@ import {
   Info,
   ChevronRight,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { createHousingListing } from "../../services/housingService";
 import { createMarketListing } from "../../services/marketService";
+import { uploadMultipleImages } from "../../services/storageService";
 import { useAuth } from "../../contexts/AuthContext";
 import LocationSelector from "./LocationSelector";
 
@@ -68,7 +70,11 @@ export default function ListingForm({
 }: ListingFormProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [formData, setFormData] = useState<ListingFormData>(initialFormData);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const updateField = <K extends keyof ListingFormData>(
   key: K,
@@ -76,6 +82,50 @@ export default function ListingForm({
 ) => {
   setFormData((prev) => ({ ...prev, [key]: value }));
 };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    // Limit to 5 images
+    if (selectedImages.length + files.length > 5) {
+      alert("Maximum 5 images allowed");
+      return;
+    }
+
+    // Validate file types
+    const validFiles = files.filter(file => {
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name} is not a valid image file`);
+        return false;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert(`${file.name} exceeds 5MB size limit`);
+        return false;
+      }
+      return true;
+    });
+
+    setSelectedImages(prev => [...prev, ...validFiles]);
+
+    // Create previews
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreviews(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleLocationSelect = (loc: {
     address: string;
@@ -130,6 +180,15 @@ export default function ListingForm({
     setLoading(true);
 
     try {
+      // Upload images if selected
+      let photoURLs: string[] = [];
+      if (selectedImages.length > 0) {
+        setUploadingImages(true);
+        const folder = type === "housing" ? "housing" : "marketplace";
+        photoURLs = await uploadMultipleImages(selectedImages, folder);
+        setUploadingImages(false);
+      }
+
       if (type === "housing") {
         const rent = Number(formData.rent);
         const deposit = Number(formData.deposit) || rent * 2;
@@ -154,7 +213,7 @@ export default function ListingForm({
           availableFrom: "Immediately",
           genderPreference: "none",
           amenities: [],
-          photos: [],
+          photos: photoURLs,
           postedBy: user.uid,
           status: "available",
         });
@@ -170,7 +229,7 @@ export default function ListingForm({
           latitude: formData.latitude,
           longitude: formData.longitude,
           formattedAddress: formData.formattedAddress,
-          photos: [],
+          photos: photoURLs,
           postedBy: user.uid,
           status: "available",
         });
@@ -380,27 +439,84 @@ export default function ListingForm({
               Visual Data
             </label>
 
-            <button
-              type="button"
-              className="w-full h-32 bg-white/5 border-2 border-dashed border-white/10 rounded-[40px] flex flex-col items-center justify-center text-white/20 hover:border-kjc-accent/30 hover:text-kjc-accent hover:bg-white/[0.08] group transition-all duration-300"
-            >
-              <Camera
-                size={40}
-                strokeWidth={1}
-                className="mb-2 group-hover:scale-110 transition-transform duration-500"
-              />
-              <span className="text-[9px] font-black uppercase tracking-[0.4em]">
-                Initialize Upload
-              </span>
-            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleImageSelect}
+              disabled={uploadingImages || selectedImages.length >= 5}
+              className="hidden"
+            />
+
+            {imagePreviews.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImages}
+                className="w-full h-32 bg-white/5 border-2 border-dashed border-white/10 rounded-[40px] flex flex-col items-center justify-center text-white/20 hover:border-kjc-accent/30 hover:text-kjc-accent hover:bg-white/[0.08] group transition-all duration-300 disabled:opacity-50"
+              >
+                <Camera
+                  size={40}
+                  strokeWidth={1}
+                  className="mb-2 group-hover:scale-110 transition-transform duration-500"
+                />
+                <span className="text-[9px] font-black uppercase tracking-[0.4em]">
+                  {uploadingImages ? "Uploading..." : "Initialize Upload"}
+                </span>
+                <span className="text-[8px] text-white/30 mt-1">
+                  Max 5 images, 5MB each
+                </span>
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {imagePreviews.map((preview, idx) => (
+                    <div
+                      key={idx}
+                      className="relative group rounded-[20px] overflow-hidden bg-white/5 border border-white/10"
+                    >
+                      <img
+                        src={preview}
+                        alt={`Preview ${idx + 1}`}
+                        className="w-full h-32 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(idx)}
+                        disabled={uploadingImages}
+                        className="absolute top-2 right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                      >
+                        <Trash2 size={14} className="text-white" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {selectedImages.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImages}
+                      className="h-32 bg-white/5 border-2 border-dashed border-white/10 rounded-[20px] flex items-center justify-center text-white/20 hover:border-kjc-accent/30 hover:text-kjc-accent hover:bg-white/[0.08] transition-all disabled:opacity-50"
+                    >
+                      <Camera size={24} strokeWidth={1} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-[9px] text-white/40 pl-4">
+                  {selectedImages.length} of 5 images selected
+                </div>
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || uploadingImages}
             className="w-full bg-kjc-accent text-white py-8 rounded-[40px] font-black uppercase tracking-[0.4em] text-[10px] hover:bg-kjc-accent/90 active:scale-[0.98] transition-all shadow-[0_20px_50px_rgba(139,92,246,0.2)] disabled:opacity-40 disabled:grayscale mt-8"
           >
-            {loading ? "Transmitting..." : "Establish Secure Post"}
+            {loading ? "Transmitting..." : uploadingImages ? "Uploading Images..." : "Establish Secure Post"}
           </button>
         </form>
       </motion.div>
