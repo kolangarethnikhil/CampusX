@@ -1,83 +1,80 @@
-import { 
-  ref, 
-  uploadBytes, 
-  getDownloadURL,
-  deleteObject 
-} from 'firebase/storage';
-import { storage, auth } from '../lib/firebase';
+import { auth } from "../lib/firebase";
+import { supabase } from "../lib/supabase";
 
-/**
- * Upload image to Firebase Storage
- * @param file - Image file to upload
- * @param folder - Folder name (e.g., 'housing', 'marketplace')
- * @returns Download URL of uploaded image
- */
-export async function uploadImage(file: File, folder: string): Promise<string> {
-  if (!auth.currentUser) {
-    throw new Error('Must be signed in to upload images');
+const BUCKET = "campusx-images";
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+
+type ImageFolder = "profiles" | "housing" | "marketplace";
+
+export async function uploadMultipleImages(
+  files: File[],
+  folder: "housing" | "marketplace"
+): Promise<string[]> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("You must be signed in to upload images.");
   }
 
-  // Validate file
-  if (!file.type.startsWith('image/')) {
-    throw new Error('File must be an image');
+  return Promise.all(files.map((file) => uploadImage(file, user.uid, folder)));
+}
+
+export async function uploadProfilePhoto(file: File, userId?: string): Promise<string> {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("You must be signed in to upload a profile photo.");
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error('Image size must be less than 5MB');
+  if (userId && user.uid !== userId) {
+    throw new Error("You can only upload your own profile photo.");
   }
 
-  try {
-    // Create unique filename
-    const timestamp = Date.now();
-    const filename = `${auth.currentUser.uid}_${timestamp}_${file.name}`;
-    
-    // Create storage reference
-    const storageRef = ref(storage, `${folder}/${filename}`);
-    
-    // Upload file
-    const snapshot = await uploadBytes(storageRef, file);
-    
-    // Get download URL
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
-  } catch (error) {
-    console.error('Image upload error:', error);
-    throw new Error(`Failed to upload image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  return uploadImage(file, user.uid, "profiles");
+}
+
+async function uploadImage(
+  file: File,
+  userId: string,
+  folder: ImageFolder
+): Promise<string> {
+  validateImage(file);
+
+  const extension = getFileExtension(file);
+  const fileName = `${crypto.randomUUID()}.${extension}`;
+  const path = `${userId}/${folder}/${fileName}`;
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    cacheControl: "31536000",
+    upsert: false,
+    contentType: file.type,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  return data.publicUrl;
+}
+
+function validateImage(file: File) {
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error("Only JPG, PNG, and WebP images are allowed.");
+  }
+
+  if (file.size > MAX_IMAGE_SIZE) {
+    throw new Error("Image must be under 5MB.");
   }
 }
 
-/**
- * Upload multiple images to Firebase Storage
- * @param files - Array of image files
- * @param folder - Folder name (e.g., 'housing', 'marketplace')
- * @returns Array of download URLs
- */
-export async function uploadMultipleImages(files: File[], folder: string): Promise<string[]> {
-  try {
-    const uploadPromises = files.map(file => uploadImage(file, folder));
-    const urls = await Promise.all(uploadPromises);
-    return urls;
-  } catch (error) {
-    console.error('Multiple image upload error:', error);
-    throw error;
-  }
-}
+function getFileExtension(file: File): string {
+  if (file.type === "image/jpeg") return "jpg";
+  if (file.type === "image/png") return "png";
+  if (file.type === "image/webp") return "webp";
 
-/**
- * Delete image from Firebase Storage
- * @param imageURL - Download URL of the image
- */
-export async function deleteImage(imageURL: string): Promise<void> {
-  try {
-    // Extract path from URL
-    const pathStart = imageURL.indexOf('/o/') + 3;
-    const pathEnd = imageURL.indexOf('?');
-    const path = decodeURIComponent(imageURL.substring(pathStart, pathEnd));
-    
-    const fileRef = ref(storage, path);
-    await deleteObject(fileRef);
-  } catch (error) {
-    console.error('Image deletion error:', error);
-    throw new Error(`Failed to delete image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  throw new Error("Unsupported image type.");
 }
