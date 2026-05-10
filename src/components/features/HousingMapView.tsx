@@ -1,5 +1,5 @@
 import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
-import { Home, IndianRupee, MapPin, Send } from "lucide-react";
+import { Home, IndianRupee, MapPin, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { KJU_LOCATION } from "../../constants/campus";
 import { HousingListing } from "../../services/housingService";
@@ -75,6 +75,7 @@ export default function HousingMapView({
           mapReady ? "opacity-100" : "opacity-0"
         }`}
         onTilesLoaded={() => setMapReady(true)}
+        onClick={() => setSelectedListing(null)}
       >
         <AdvancedMarker position={KJU_LOCATION}>
           <div className="relative">
@@ -99,11 +100,14 @@ export default function HousingMapView({
               lat: listing.latitude!,
               lng: listing.longitude!,
             }}
-            onClick={() => setSelectedListing(listing)}
+            onClick={(event) => {
+              event.stop();
+              setSelectedListing(listing);
+            }}
           >
             <button
               type="button"
-              className={`min-w-[72px] rounded-[20px] border px-3 py-2 text-center shadow-2xl transition-all active:scale-95 ${
+              className={`min-w-[72px] rounded-[20px] border px-3 py-2 text-center shadow-2xl transition-transform duration-150 ease-out active:scale-[0.97] ${
                 selectedListing?.id === listing.id
                   ? "border-kjc-accent bg-kjc-accent text-white"
                   : "border-white/20 bg-black text-white"
@@ -156,9 +160,20 @@ export default function HousingMapView({
                 </p>
               </div>
 
-              <span className="shrink-0 rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-white">
-                {formatRoomType(selectedListing.roomType)}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-white">
+                  {formatRoomType(selectedListing.roomType)}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedListing(null)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97]"
+                  aria-label="Close listing preview"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="mb-5 flex items-center gap-2">
@@ -175,7 +190,7 @@ export default function HousingMapView({
               <button
                 type="button"
                 onClick={() => onOpenDetails(selectedListing)}
-                className="rounded-[22px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white transition-all active:scale-95"
+                className="rounded-[22px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white transition-transform duration-150 ease-out active:scale-[0.97]"
               >
                 Details
               </button>
@@ -190,7 +205,7 @@ export default function HousingMapView({
                     "housing"
                   )
                 }
-                className="flex items-center justify-center gap-2 rounded-[22px] bg-white py-4 text-[10px] font-black uppercase tracking-[0.18em] text-black transition-all active:scale-95"
+                className="flex items-center justify-center gap-2 rounded-[22px] bg-white py-4 text-[10px] font-black uppercase tracking-[0.18em] text-black transition-transform duration-150 ease-out active:scale-[0.97]"
               >
                 Ping
                 <Send size={14} />
