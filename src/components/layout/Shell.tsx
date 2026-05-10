@@ -1,110 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Home, 
-  ShoppingBag, 
-  Bookmark, 
-  MessageSquare, 
-  User, 
-  Plus, 
-  Search, 
-  MapPin,
-  TrendingUp,
-  Filter,
-  X,
+import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  ArrowLeft,
+  Bookmark,
   CheckCircle2,
   ChevronRight,
+  Filter,
+  Home,
+  MapPin,
+  MessageSquare,
+  Plus,
+  Search,
   Send,
-  ArrowLeft,
-  ShieldCheck
-} from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
-import { getHousingListings, HousingListing } from '../../services/housingService';
-import { getMarketListings, MarketListing } from '../../services/marketService';
-import { saveListing, unsaveListing, getSavedListings, checkIsSaved } from '../../services/savedService';
-import { 
-  startConversation, 
-  subscribeToConversations, 
-  subscribeToMessages, 
-  sendMessage, 
-  Conversation, 
-  Message 
-} from '../../services/chatService';
-import ListingForm from '../features/ListingForm';
-import VerificationModal from '../features/VerificationModal';
+  ShieldCheck,
+  ShoppingBag,
+  User,
+  X,
+} from "lucide-react";
 
-// --- Types ---
-type Tab = 'rooms' | 'market' | 'saved' | 'messages' | 'profile';
+import { useAuth } from "../../contexts/AuthContext";
+import { getHousingListings, HousingListing } from "../../services/housingService";
+import { getMarketListings, MarketListing } from "../../services/marketService";
+import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
+import {
+  Conversation,
+  Message,
+  sendMessage,
+  startConversation,
+  subscribeToConversations,
+  subscribeToMessages,
+} from "../../services/chatService";
 
-// --- Components ---
+import ListingForm from "../features/ListingForm";
+import VerificationModal from "../features/VerificationModal";
 
-const BottomNav = ({ activeTab, onTabChange, onAddClick }: { activeTab: Tab, onTabChange: (tab: Tab) => void, onAddClick: () => void }) => {
+type Tab = "home" | "search" | "inbox" | "me";
+
+type ListingType = "housing" | "market";
+
+interface BottomNavProps {
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+  onAddClick: () => void;
+}
+
+function BottomNav({ activeTab, onTabChange, onAddClick }: BottomNavProps) {
   const tabs = [
-    { id: 'rooms', icon: Home, label: 'Rooms' },
-    { id: 'market', icon: ShoppingBag, label: 'Market' },
-    { id: 'add', icon: Plus, label: 'Create', special: true },
-    { id: 'messages', icon: MessageSquare, label: 'Inbox' },
-    { id: 'profile', icon: User, label: 'Profile' }
+    { id: "home", icon: Home, label: "Home" },
+    { id: "search", icon: Search, label: "Search" },
+    { id: "add", icon: Plus, label: "Post", special: true },
+    { id: "inbox", icon: MessageSquare, label: "Inbox" },
+    { id: "me", icon: User, label: "Me" },
   ];
 
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 p-2 bg-kjc-black/60 backdrop-blur-3xl rounded-[36px] shadow-pro-lg border border-white/10">
+    <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-[32px] border border-white/10 bg-black/90 p-2 shadow-pro-lg">
       {tabs.map((tab) => (
-        <button 
+        <button
           key={tab.id}
+          type="button"
           onClick={() => {
-            if (tab.id === 'add') onAddClick();
+            if (tab.id === "add") onAddClick();
             else onTabChange(tab.id as Tab);
           }}
-          className={`relative flex flex-col items-center justify-center transition-all duration-300 ${
-            tab.special 
-              ? 'w-16 h-16 bg-kjc-accent text-white rounded-full -mt-4 shadow-lg shadow-kjc-accent/30 active:scale-90 scale-110' 
-              : `w-14 h-14 rounded-full ${activeTab === tab.id ? 'text-white bg-white/10' : 'text-white/40 hover:text-white hover:bg-white/5'} active:scale-90`
+          className={`relative flex flex-col items-center justify-center transition-all duration-300 active:scale-90 ${
+            tab.special
+              ? "h-16 w-16 -mt-5 scale-110 rounded-full bg-kjc-accent text-white shadow-lg shadow-kjc-accent/30"
+              : `h-14 w-14 rounded-full ${
+                  activeTab === tab.id
+                    ? "bg-white/10 text-white"
+                    : "text-white/40 hover:bg-white/5 hover:text-white"
+                }`
           }`}
+          aria-label={tab.label}
         >
           <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
+
           {activeTab === tab.id && !tab.special && (
-            <motion.div 
+            <motion.div
               layoutId="activeTabDot"
-              className="absolute -bottom-1 w-1 h-1 bg-kjc-accent rounded-full"
+              className="absolute -bottom-1 h-1 w-1 rounded-full bg-kjc-accent"
             />
           )}
         </button>
       ))}
     </div>
   );
-};
+}
 
-const Header = ({ title, activeTab, onSearch, onFilterClick, showFilters }: { title: string, activeTab: Tab, onSearch: (val: string) => void, onFilterClick: () => void, showFilters: boolean }) => {
+interface HeaderProps {
+  activeTab: Tab;
+  onSearch: (value: string) => void;
+  onFilterClick: () => void;
+  showFilters: boolean;
+}
+
+function Header({ activeTab, onSearch, onFilterClick, showFilters }: HeaderProps) {
   const [isSearching, setIsSearching] = useState(false);
-  const [searchVal, setSearchVal] = useState('');
+  const [searchVal, setSearchVal] = useState("");
 
   return (
-    <header className="glass-header px-6 py-4">
-      <div className="max-w-4xl mx-auto flex justify-between items-center">
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-black/90 px-6 py-4">
+      <div className="mx-auto flex max-w-xl items-center justify-between">
         {!isSearching ? (
           <>
-            <motion.div 
-              initial={{ opacity: 0, x: -10 }}
+            <motion.div
+              initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               className="flex flex-col"
             >
-               <div className="flex items-center gap-2">
-                 <h1 className="text-2xl pro-heading tracking-tighter">Campus<span className="text-kjc-accent italic">X</span></h1>
-                 <div className="w-1.5 h-1.5 bg-kjc-accent rounded-full animate-pulse" />
-               </div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl pro-heading tracking-tighter">
+                  Campus<span className="text-kjc-accent italic">X</span>
+                </h1>
+                <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-kjc-accent" />
+              </div>
+              <p className="mt-1 text-[9px] font-black uppercase tracking-[0.3em] text-white/30">
+                KJC campus housing & essentials
+              </p>
             </motion.div>
+
             <div className="flex items-center gap-2.5">
-              <button 
+              <button
+                type="button"
                 onClick={() => setIsSearching(true)}
-                className="p-3 text-white bg-white/5 rounded-2xl transition-all active:scale-90 border border-white/5 hover:bg-white/10"
+                className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white transition-all hover:bg-white/10 active:scale-90"
+                aria-label="Search"
               >
                 <Search size={22} />
               </button>
-              {(activeTab === 'rooms' || activeTab === 'market') && (
-                <button 
-                   onClick={onFilterClick}
-                   className={`p-3 rounded-2xl transition-all active:scale-90 border ${showFilters ? 'bg-kjc-accent text-white border-kjc-accent' : 'bg-white/5 text-white border-white/5 hover:bg-white/10'}`}
+
+              {(activeTab === "home" || activeTab === "search") && (
+                <button
+                  type="button"
+                  onClick={onFilterClick}
+                  className={`rounded-2xl border p-3 transition-all active:scale-90 ${
+                    showFilters
+                      ? "border-kjc-accent bg-kjc-accent text-white"
+                      : "border-white/5 bg-white/5 text-white hover:bg-white/10"
+                  }`}
+                  aria-label="Filters"
                 >
                   <Filter size={22} />
                 </button>
@@ -112,31 +147,34 @@ const Header = ({ title, activeTab, onSearch, onFilterClick, showFilters }: { ti
             </div>
           </>
         ) : (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex-1 flex items-center gap-3"
+            className="flex flex-1 items-center gap-3"
           >
             <div className="relative flex-1">
-               <Search size={18} className="absolute left-6 top-1/2 -translate-y-1/2 text-white/40" />
-               <input 
-                 autoFocus
-                 value={searchVal}
-                 onChange={(e) => {
-                   setSearchVal(e.target.value);
-                   onSearch(e.target.value);
-                 }}
-                 placeholder="Search campus..."
-                 className="input-pro pl-14"
-               />
+              <Search size={18} className="absolute left-6 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                autoFocus
+                value={searchVal}
+                onChange={(event) => {
+                  setSearchVal(event.target.value);
+                  onSearch(event.target.value);
+                }}
+                placeholder="Search rooms, PGs, tables..."
+                className="input-pro pl-14"
+              />
             </div>
-            <button 
-              onClick={() => { 
-                setIsSearching(false); 
-                setSearchVal('');
-                onSearch('');
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsSearching(false);
+                setSearchVal("");
+                onSearch("");
               }}
-              className="p-3 bg-white/5 text-white rounded-2xl active:scale-90 border border-white/5"
+              className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white active:scale-90"
+              aria-label="Close search"
             >
               <X size={24} />
             </button>
@@ -145,246 +183,291 @@ const Header = ({ title, activeTab, onSearch, onFilterClick, showFilters }: { ti
       </div>
     </header>
   );
-};
+}
 
-const ListingCard: React.FC<{ 
-  listing: HousingListing | MarketListing, 
-  type: 'housing' | 'market',
-  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>
-}> = ({ 
-  listing, 
-  type, 
-  onContact 
-}) => {
+interface ListingCardProps {
+  listing: HousingListing | MarketListing;
+  type: ListingType;
+  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
+}
+
+function ListingCard({ listing, type, onContact }: ListingCardProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
   const { user, signIn } = useAuth();
 
+  const isHousing = type === "housing";
+  const housingListing = listing as HousingListing;
+  const marketListing = listing as MarketListing;
+  const price = isHousing ? housingListing.rent : marketListing.price;
+
   useEffect(() => {
+    let active = true;
+
+    async function checkSaved() {
+      if (!listing.id || !user) {
+        setIsSaved(false);
+        setSaveId(null);
+        return;
+      }
+
+      const result = await checkIsSaved(listing.id);
+
+      if (!active) return;
+
+      setIsSaved(result.saved);
+      setSaveId(result.saveId);
+    }
+
     checkSaved();
+
+    return () => {
+      active = false;
+    };
   }, [listing.id, user]);
 
-  const checkSaved = async () => {
-    const res = await checkIsSaved(listing.id!);
-    if (res) {
-      setIsSaved(res.saved);
-      setSaveId(res.saveId);
-    }
-  };
+  const handleToggleSave = async (event: React.MouseEvent) => {
+    event.stopPropagation();
 
-  const handleToggleSave = async (e: React.MouseEvent) => {
-    e.stopPropagation();
     if (!user) {
       await signIn();
       return;
     }
+
     if (isSaved && saveId) {
       await unsaveListing(saveId);
       setIsSaved(false);
       setSaveId(null);
-    } else {
-      const id = await saveListing(listing.id!, type);
-      setIsSaved(true);
-      setSaveId(id);
+      return;
     }
+
+    const id = await saveListing(listing.id, type);
+    setIsSaved(true);
+    setSaveId(id);
   };
 
-  const isHousing = type === 'housing';
-  const hListing = listing as HousingListing;
-  const mListing = listing as MarketListing;
-  const price = isHousing ? hListing.rent : mListing.price;
-
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      whileTap={{ scale: 0.98 }}
-      className="group relative bg-white/5 rounded-[48px] border border-white/10 overflow-hidden shadow-pro hover:shadow-pro-lg transition-all duration-500 mb-8"
+      whileTap={{ scale: 0.985 }}
+      className="group mb-8 overflow-hidden rounded-[40px] border border-white/10 bg-white/[0.04] shadow-pro transition-all duration-300 hover:border-white/15"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
-        {listing.photos && listing.photos[0] ? (
-          <img 
-            src={listing.photos[0]} 
+        {listing.photos?.[0] ? (
+          <img
+            src={listing.photos[0]}
             alt={listing.title}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full bg-white/[0.02] flex items-center justify-center text-white/10">
-             {isHousing ? <Home size={64} strokeWidth={1} /> : <ShoppingBag size={64} strokeWidth={1} />}
+          <div className="flex h-full w-full items-center justify-center bg-white/[0.025] text-white/10">
+            {isHousing ? <Home size={64} strokeWidth={1} /> : <ShoppingBag size={64} strokeWidth={1} />}
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-kjc-black/80 via-transparent to-transparent" />
-        
-        <div className="absolute top-6 left-6 right-6 flex justify-between items-start">
-           <div className="flex flex-col gap-2">
-              <span className={`pro-badge ${isHousing ? 'bg-kjc-accent' : 'bg-white/20 backdrop-blur-md'} text-white shadow-xl`}>
-                {isHousing ? (hListing.roomType || 'Residence') : (mListing.category || 'Market')}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+
+        <div className="absolute left-5 right-5 top-5 flex items-start justify-between">
+          <div className="flex flex-col gap-2">
+            <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white shadow-xl">
+              {isHousing ? housingListing.roomType || "Room" : marketListing.category || "Item"}
+            </span>
+
+            {isHousing && housingListing.genderPreference && housingListing.genderPreference !== "none" && (
+              <span className="rounded-full border border-white/10 bg-black/40 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
+                {housingListing.genderPreference} only
               </span>
-              {isHousing && hListing.genderPreference && hListing.genderPreference !== 'none' && (
-                <span className="pro-badge bg-white/10 backdrop-blur-md text-white border border-white/10">
-                  {hListing.genderPreference} Only
-                </span>
-              )}
-           </div>
-           <button 
-             onClick={handleToggleSave}
-             className={`w-12 h-12 rounded-3xl flex items-center justify-center transition-all backdrop-blur-xl border ${
-               isSaved 
-                ? 'bg-rose-500 text-white border-rose-500 scale-110 shadow-lg shadow-rose-500/20' 
-                : 'bg-black/20 text-white border-white/20 hover:bg-white/20'
-             }`}
-           >
-             <Bookmark size={20} fill={isSaved ? 'currentColor' : 'none'} />
-           </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleToggleSave}
+            className={`flex h-12 w-12 items-center justify-center rounded-3xl border transition-all ${
+              isSaved
+                ? "scale-105 border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20"
+                : "border-white/20 bg-black/30 text-white hover:bg-white/15"
+            }`}
+            aria-label={isSaved ? "Unsave listing" : "Save listing"}
+          >
+            <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
+          </button>
         </div>
 
-        <div className="absolute bottom-6 left-8 right-8 flex justify-between items-end">
-           <div className="flex flex-col">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-white/40 text-[10px] font-black uppercase tracking-widest">₹</span>
-                <span className="text-3xl font-display font-black text-white tracking-tighter">
-                  {price.toLocaleString()}
-                </span>
-                {isHousing && <span className="text-white/40 text-[10px] uppercase font-bold tracking-[0.2em] pl-1">/ month</span>}
-              </div>
-              {isHousing && hListing.maintenance ? (
-                <p className="text-[8px] text-white/30 font-bold uppercase tracking-[0.2em] mt-1">Incl. ₹{hListing.maintenance} maintenance</p>
-              ) : null}
-           </div>
-           {!isHousing && (listing as any).isNegotiable && (
-             <span className="pro-badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[8px] px-3 py-1.5 backdrop-blur-md">Negotiable</span>
-           )}
+        <div className="absolute bottom-6 left-6 right-6">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-white/50">₹</span>
+            <span className="font-display text-3xl font-black tracking-tighter text-white">
+              {price.toLocaleString()}
+            </span>
+            {isHousing && (
+              <span className="pl-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">
+                / month
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="p-8 pt-6 space-y-5">
+      <div className="space-y-5 p-7">
         <div>
-          <h3 className="text-2xl pro-heading mb-2 group-hover:text-kjc-accent transition-colors truncate tracking-[-0.03em]">{listing.title}</h3>
-          <div className="flex items-center gap-2.5 text-white/40">
+          <h3 className="mb-2 truncate text-2xl pro-heading tracking-[-0.03em] transition-colors group-hover:text-kjc-accent">
+            {listing.title}
+          </h3>
+
+          <div className="flex items-center gap-2.5 text-white/45">
             <MapPin size={14} className="shrink-0 text-kjc-accent" />
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] truncate">
-              {listing.formattedAddress ? listing.formattedAddress.split(',')[0] : (listing as any).location || 'Campus Area'}
+            <p className="truncate text-[10px] font-black uppercase tracking-[0.22em]">
+              {listing.formattedAddress?.split(",")[0] || (listing as any).location || "Campus area"}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2.5">
-           <span className="text-[9px] font-black bg-white/[0.03] text-white/60 px-4 py-2 rounded-xl uppercase tracking-[0.15em] border border-white/5">
-             {isHousing ? (hListing.furnishing || 'Unfurnished') : ((listing as any).condition || 'Good')}
-           </span>
-           {!isHousing && (
-             <span className="text-[9px] font-black bg-kjc-accent/10 text-kjc-accent px-4 py-2 rounded-xl uppercase tracking-[0.15em] border border-kjc-accent/20">
-               {mListing.category}
-             </span>
-           )}
-           {isHousing && hListing.amenities?.slice(0, 2).map((a, i) => (
-             <span key={i} className="text-[9px] font-black bg-white/[0.03] text-white/60 px-4 py-2 rounded-xl uppercase tracking-[0.15em] border border-white/5">
-               {a}
-             </span>
-           ))}
+          <span className="rounded-xl border border-white/5 bg-white/[0.035] px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white/60">
+            {isHousing ? housingListing.furnishing || "Unfurnished" : marketListing.condition || "Good"}
+          </span>
+
+          {!isHousing && (
+            <span className="rounded-xl border border-kjc-accent/20 bg-kjc-accent/10 px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-kjc-accent">
+              {marketListing.category}
+            </span>
+          )}
+
+          {isHousing &&
+            housingListing.amenities?.slice(0, 2).map((amenity) => (
+              <span
+                key={amenity}
+                className="rounded-xl border border-white/5 bg-white/[0.035] px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white/60"
+              >
+                {amenity}
+              </span>
+            ))}
         </div>
 
-        {isHousing && hListing.preferTenants && (
-          <div className="bg-white/[0.02] border border-white/5 p-4 rounded-3xl">
-            <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] leading-none mb-2">Ideal Resident</p>
-            <p className="text-[11px] font-bold text-kjc-accent/80 tracking-tight">{hListing.preferTenants} Jayantians Prefered</p>
+        {isHousing && housingListing.preferTenants && (
+          <div className="rounded-3xl border border-white/5 bg-white/[0.025] p-4">
+            <p className="mb-2 text-[10px] font-black uppercase leading-none tracking-[0.2em] text-white/40">
+              Preferred tenant
+            </p>
+            <p className="text-[11px] font-bold tracking-tight text-kjc-accent/85">
+              {housingListing.preferTenants}
+            </p>
           </div>
         )}
 
-        <div className="pt-2">
-           <button 
-             onClick={() => onContact(listing.postedBy, listing.id, listing.title, type)}
-             className="w-full bg-kjc-navy text-white py-5 rounded-[28px] font-black uppercase tracking-[0.3em] text-[10px] hover:bg-kjc-accent transition-all flex items-center justify-center gap-3 overflow-hidden group/btn shadow-pro active:scale-[0.98] border border-white/5"
-           >
-             Secure Channel
-             <Send size={16} className="translate-x-[-10px] opacity-0 group-hover/btn:translate-x-0 group-hover/btn:opacity-100 transition-all duration-300" />
-           </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onContact(listing.postedBy, listing.id, listing.title, type)}
+          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white text-black py-5 text-[10px] font-black uppercase tracking-[0.28em] shadow-pro transition-all hover:bg-kjc-accent hover:text-white active:scale-[0.98]"
+        >
+          Ping owner
+          <Send size={16} />
+        </button>
       </div>
     </motion.div>
   );
-};
+}
 
-const Chattery = () => {
+function Chattery() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const { user } = useAuth();
 
   useEffect(() => {
-    const unsub = subscribeToConversations(setConversations);
-    return unsub;
-  }, []);
+    const unsubscribe = subscribeToConversations(setConversations);
+    return unsubscribe;
+  }, [user]);
 
   useEffect(() => {
-    if (selectedChat) {
-      const unsub = subscribeToMessages(selectedChat.id, setMessages);
-      return unsub;
+    if (!selectedChat) {
+      setMessages([]);
+      return;
     }
+
+    const unsubscribe = subscribeToMessages(selectedChat.id, setMessages);
+    return unsubscribe;
   }, [selectedChat]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedChat) return;
+
     await sendMessage(selectedChat.id, input.trim());
-    setInput('');
+    setInput("");
   };
 
   if (selectedChat) {
     return (
-      <div className="fixed inset-0 z-[120] bg-kjc-black flex flex-col">
-        <header className="p-8 bg-kjc-black/60 backdrop-blur-3xl border-b border-white/10 flex items-center justify-between sticky top-0">
-          <div className="flex items-center gap-5">
-            <button onClick={() => setSelectedChat(null)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-white/40 active:scale-90 transition-all border border-white/5 hover:text-white">
+      <div className="fixed inset-0 z-[120] flex flex-col bg-black">
+        <header className="sticky top-0 flex items-center justify-between border-b border-white/10 bg-black/95 p-6">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setSelectedChat(null)}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/5 text-white/50 transition-all hover:text-white active:scale-90"
+              aria-label="Back to inbox"
+            >
               <ArrowLeft size={24} />
             </button>
+
             <div>
-               <h3 className="pro-heading text-xl tracking-tighter leading-none">{selectedChat.listingTitle}</h3>
-               <div className="flex items-center gap-2 mt-2">
-                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                 <p className="text-[9px] font-black uppercase text-emerald-500 tracking-[0.3em]">Encrypted Channel</p>
-               </div>
+              <h3 className="text-xl pro-heading leading-none tracking-tighter">
+                {selectedChat.listingTitle}
+              </h3>
+              <p className="mt-2 text-[9px] font-black uppercase tracking-[0.25em] text-white/35">
+                Regarding this listing
+              </p>
             </div>
           </div>
-          <div className="w-12 h-12 bg-white/5 rounded-3xl flex items-center justify-center text-kjc-accent border border-white/5">
+
+          <div className="flex h-12 w-12 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-kjc-accent">
             <ShieldCheck size={24} />
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
+        <div className="flex-1 space-y-7 overflow-y-auto p-6 scrollbar-hide">
           {messages.length === 0 && (
-            <div className="text-center py-24 space-y-6">
-              <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center text-white/10 mx-auto border border-white/5">
+            <div className="space-y-6 py-24 text-center">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[32px] border border-white/5 bg-white/5 text-white/10">
                 <MessageSquare size={32} strokeWidth={1} />
               </div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Beginning of secure briefing</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/25">
+                Start the conversation
+              </p>
             </div>
           )}
-          {messages.map((m, idx) => {
-            const isMe = m.senderId === user?.uid;
-            const mDate = m.createdAt?.toDate?.() || new Date(m.createdAt);
-            const prevM = messages[idx-1];
-            const prevDate = prevM ? (prevM.createdAt?.toDate?.() || new Date(prevM.createdAt)) : null;
-            const showTime = idx === 0 || mDate.getMinutes() !== prevDate?.getMinutes();
-            
+
+          {messages.map((message, index) => {
+            const isMe = message.senderId === user?.uid;
+            const messageDate = message.createdAt?.toDate?.() || new Date(message.createdAt);
+            const previousMessage = messages[index - 1];
+            const previousDate = previousMessage
+              ? previousMessage.createdAt?.toDate?.() || new Date(previousMessage.createdAt)
+              : null;
+            const showTime = index === 0 || messageDate.getMinutes() !== previousDate?.getMinutes();
+
             return (
-              <div key={m.id} className="space-y-2">
+              <div key={message.id} className="space-y-2">
                 {showTime && (
-                  <p className="text-center text-[9px] font-black text-white/20 uppercase tracking-[0.4em] py-3">
-                    {mDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <p className="py-2 text-center text-[9px] font-black uppercase tracking-[0.3em] text-white/20">
+                    {messageDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 )}
-                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                  <motion.div 
-                    initial={{ scale: 0.9, opacity: 0, y: 10 }}
+
+                <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                  <motion.div
+                    initial={{ scale: 0.96, opacity: 0, y: 8 }}
                     animate={{ scale: 1, opacity: 1, y: 0 }}
-                    className={`max-w-[85%] px-6 py-5 text-sm font-medium leading-relaxed tracking-tight shadow-pro border ${
-                      isMe 
-                        ? 'bg-kjc-accent text-white rounded-[32px] rounded-tr-[4px] border-kjc-accent/20' 
-                        : 'bg-white/5 text-white/80 rounded-[32px] rounded-tl-[4px] border-white/10'
+                    className={`max-w-[85%] border px-6 py-4 text-sm font-medium leading-relaxed tracking-tight shadow-pro ${
+                      isMe
+                        ? "rounded-[28px] rounded-tr-[6px] border-kjc-accent/20 bg-kjc-accent text-white"
+                        : "rounded-[28px] rounded-tl-[6px] border-white/10 bg-white/5 text-white/85"
                     }`}
                   >
-                    {m.content}
+                    {message.content}
                   </motion.div>
                 </div>
               </div>
@@ -392,22 +475,27 @@ const Chattery = () => {
           })}
         </div>
 
-        <div className="p-8 bg-kjc-black/60 backdrop-blur-3xl border-t border-white/10">
-          <div className="flex gap-4 max-w-2xl mx-auto items-center">
-             <input 
-               value={input}
-               onChange={(e) => setInput(e.target.value)}
-               placeholder="Transmit offer..."
-               className="flex-1 input-pro"
-               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-             />
-             <button 
-               onClick={handleSend}
-               disabled={!input.trim()}
-               className="w-16 h-16 bg-kjc-accent text-white rounded-[24px] flex items-center justify-center hover:bg-kjc-accent/90 active:scale-95 transition-all shadow-lg shadow-kjc-accent/20 disabled:opacity-40"
-             >
-               <Send size={24} />
-             </button>
+        <div className="border-t border-white/10 bg-black/95 p-6">
+          <div className="mx-auto flex max-w-2xl items-center gap-4">
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Type a message..."
+              className="input-pro flex-1"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleSend();
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-kjc-accent text-white shadow-lg shadow-kjc-accent/20 transition-all hover:bg-kjc-accent/90 active:scale-95 disabled:opacity-40"
+              aria-label="Send message"
+            >
+              <Send size={24} />
+            </button>
           </div>
         </div>
       </div>
@@ -416,156 +504,226 @@ const Chattery = () => {
 
   return (
     <div className="space-y-10">
-      <div className="flex flex-col gap-1 mb-2">
-        <h2 className="text-4xl pro-heading tracking-tighter">Campus<span className="text-kjc-accent italic">X</span> Briefs</h2>
-        <p className="text-[10px] text-white/40 font-black uppercase tracking-[0.4em]">Zero-Knowledge Secure Messaging</p>
+      <div className="mb-2 flex flex-col gap-1">
+        <h2 className="text-4xl pro-heading tracking-tighter">Inbox</h2>
+        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+          Chats about listings and posts
+        </p>
       </div>
-      
+
       {conversations.length === 0 ? (
-        <div className="text-center py-24 bg-white/5 rounded-[56px] border border-dashed border-white/10">
-          <div className="w-24 h-24 bg-white/5 rounded-[40px] mx-auto mb-8 flex items-center justify-center text-white/10">
+        <div className="rounded-[48px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
+          <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-[36px] bg-white/5 text-white/10">
             <MessageSquare size={40} strokeWidth={1} />
           </div>
-          <h2 className="pro-heading text-2xl mb-2 tracking-tighter">Transmission Void</h2>
-          <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em] px-12 leading-relaxed">No secure channels established yet.</p>
+          <h2 className="mb-2 text-2xl pro-heading tracking-tighter">No chats yet</h2>
+          <p className="px-12 text-[10px] font-black uppercase leading-relaxed tracking-[0.25em] text-white/30">
+            Ping a listing owner to start a chat.
+          </p>
         </div>
       ) : (
         <div className="grid gap-5">
-          {conversations.map(conv => (
-            <motion.button 
+          {conversations.map((conversation) => (
+            <motion.button
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              key={conv.id}
-              onClick={() => setSelectedChat(conv)}
-              className="w-full bg-white/5 p-8 rounded-[48px] border border-white/5 flex items-center gap-6 hover:bg-white/[0.08] hover:border-white/10 active:scale-95 group transition-all"
+              key={conversation.id}
+              type="button"
+              onClick={() => setSelectedChat(conversation)}
+              className="group flex w-full items-center gap-6 rounded-[40px] border border-white/5 bg-white/5 p-7 text-left transition-all hover:border-white/10 hover:bg-white/[0.08] active:scale-95"
             >
               <div className="relative">
-                <div className="w-16 h-16 bg-white/5 rounded-3xl flex items-center justify-center text-white/40 group-hover:bg-kjc-accent group-hover:text-white transition-all duration-500 shadow-inner">
-                  {conv.listingType === 'housing' ? <Home size={28} /> : <ShoppingBag size={28} />}
+                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/5 text-white/45 shadow-inner transition-all duration-300 group-hover:bg-kjc-accent group-hover:text-white">
+                  {conversation.listingType === "housing" ? <Home size={28} /> : <ShoppingBag size={28} />}
                 </div>
-                {(conv.unreadCount ?? 0) > 0 && (
-  <div className="absolute -top-1 -right-1 w-6 h-6 bg-kjc-accent border-2 border-kjc-black rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-lg">
-    {conv.unreadCount ?? 0}
-  </div>
-                    
+
+                {(conversation.unreadCount ?? 0) > 0 && (
+                  <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-black bg-kjc-accent text-[10px] font-black text-white shadow-lg">
+                    {conversation.unreadCount ?? 0}
+                  </div>
                 )}
               </div>
-              <div className="flex-1 text-left min-w-0">
-                 <div className="flex justify-between items-start gap-4">
-                    <h4 className="pro-heading text-xl truncate tracking-tight">{conv.listingTitle}</h4>
-                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded-full whitespace-nowrap">Live</p>
-                 </div>
-                 <p className="text-[11px] text-white/40 font-bold line-clamp-1 mt-1 uppercase tracking-wider">{conv.lastMessage || 'Establish first link...'}</p>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-4">
+                  <h4 className="truncate text-xl pro-heading tracking-tight">
+                    {conversation.listingTitle}
+                  </h4>
+                  <p className="whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                    Active
+                  </p>
+                </div>
+
+                <p className="mt-1 line-clamp-1 text-[11px] font-bold uppercase tracking-wider text-white/40">
+                  {conversation.lastMessage || "Start chatting..."}
+                </p>
               </div>
-              <ChevronRight size={20} className="text-white/10 group-hover:text-white group-hover:translate-x-1 transition-all" />
+
+              <ChevronRight
+                size={20}
+                className="text-white/10 transition-all group-hover:translate-x-1 group-hover:text-white"
+              />
             </motion.button>
           ))}
         </div>
       )}
     </div>
   );
-};
+}
 
-const RoomsPage = ({ listings, loading, onContact, showFilters, setShowFilters }: { listings: HousingListing[], loading: boolean, onContact: any, showFilters: boolean, setShowFilters: (v: boolean) => void }) => {
-  const [category, setCategory] = useState('All');
+interface RoomsPageProps {
+  listings: HousingListing[];
+  loading: boolean;
+  onContact: ListingCardProps["onContact"];
+  showFilters: boolean;
+}
+
+function RoomsPage({ listings, loading, onContact, showFilters }: RoomsPageProps) {
+  const [category, setCategory] = useState("All");
   const [priceMax, setPriceMax] = useState<number>(50000);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
-  const amenitiesList = ['Wifi', 'Laundry', 'AC', 'Parking', 'Kitchen'];
+  const amenitiesList = ["Wifi", "Laundry", "AC", "Parking", "Kitchen"];
 
-  const filtered = listings.filter(l => {
-    const categoryMatch = category === 'All' || l.roomType.toLowerCase() === category.toLowerCase();
-    const priceMatch = l.rent <= priceMax;
-    const amenitiesMatch = selectedAmenities.length === 0 || selectedAmenities.every(a => l.amenities?.includes(a));
+  const filtered = listings.filter((listing) => {
+    const categoryMatch = category === "All" || listing.roomType.toLowerCase() === category.toLowerCase();
+    const priceMatch = listing.rent <= priceMax;
+    const amenitiesMatch =
+      selectedAmenities.length === 0 ||
+      selectedAmenities.every((amenity) => listing.amenities?.includes(amenity));
+
     return categoryMatch && priceMatch && amenitiesMatch;
   });
 
   const toggleAmenity = (amenity: string) => {
-    setSelectedAmenities(prev => prev.includes(amenity) ? prev.filter(a => a !== amenity) : [...prev, amenity]);
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((item) => item !== amenity) : [...prev, amenity]
+    );
   };
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-1 mb-2">
-        <h2 className="text-4xl pro-heading tracking-tighter capitalize group flex items-center gap-3">
-          Campus <span className="text-kjc-accent italic">Livings</span>
-          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+      <div className="mb-2 flex flex-col gap-1">
+        <h2 className="flex items-center gap-3 text-4xl pro-heading tracking-tighter">
+          Housing <span className="text-kjc-accent italic">near KJC</span>
+          <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
         </h2>
-        <p className="text-[10px] text-white/40 font-black uppercase tracking-[0.4em]">Verified Student Residences</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+          Rooms, PGs and flats posted by students
+        </p>
       </div>
 
-      <div className="flex overflow-x-auto gap-3 pb-3 scrollbar-hide py-1">
-        {['All', 'Single', 'Shared', '1BHK', 'PG'].map(f => (
-          <button 
-            key={f} 
-            onClick={() => setCategory(f)}
-            className={`px-8 py-4 rounded-[24px] border text-[10px] font-black whitespace-nowrap transition-all uppercase tracking-[0.2em] ${
-              category === f ? 'bg-kjc-accent text-white border-kjc-accent shadow-lg shadow-kjc-accent/20' : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'
+      <div className="flex gap-3 overflow-x-auto py-1 pb-3 scrollbar-hide">
+        {["All", "single", "shared", "1BHK", "PG"].map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setCategory(filter)}
+            className={`whitespace-nowrap rounded-[22px] border px-7 py-4 text-[10px] font-black uppercase tracking-[0.18em] transition-all ${
+              category === filter
+                ? "border-kjc-accent bg-kjc-accent text-white shadow-lg shadow-kjc-accent/20"
+                : "border-white/5 bg-white/5 text-white/40 hover:border-white/20"
             }`}
           >
-            {f}
+            {filter}
           </button>
         ))}
       </div>
 
       <AnimatePresence>
         {showFilters && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0, y: -20 }}
-            animate={{ height: 'auto', opacity: 1, y: 0 }}
-            exit={{ height: 0, opacity: 0, y: -20 }}
-            className="overflow-hidden bg-white/5 rounded-[48px] border border-white/10 shadow-pro p-10 space-y-10"
+          <motion.div
+            initial={{ height: 0, opacity: 0, y: -12 }}
+            animate={{ height: "auto", opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -12 }}
+            className="overflow-hidden rounded-[40px] border border-white/10 bg-white/5 p-8 shadow-pro"
           >
-            <div className="space-y-5">
-              <div className="flex justify-between items-end">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Budget Limit</span>
-                  <p className="text-2xl font-display font-black text-white tracking-tighter">₹{priceMax.toLocaleString()}<span className="text-white/20 text-sm font-bold ml-2">/ month</span></p>
-                </div>
-                <button onClick={() => setPriceMax(50000)} className="text-[10px] font-black text-kjc-accent uppercase tracking-[0.2em] hover:opacity-80">Reset</button>
-              </div>
-              <input 
-                type="range" min="1000" max="50000" step="500" value={priceMax}
-                onChange={(e) => setPriceMax(parseInt(e.target.value))}
-                className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-kjc-accent"
-              />
-            </div>
+            <div className="space-y-8">
+              <div className="space-y-5">
+                <div className="flex items-end justify-between">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                      Budget limit
+                    </span>
+                    <p className="font-display text-2xl font-black tracking-tighter text-white">
+                      ₹{priceMax.toLocaleString()}
+                      <span className="ml-2 text-sm font-bold text-white/20">/ month</span>
+                    </p>
+                  </div>
 
-            <div className="space-y-6">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Essentials Required</label>
-              <div className="flex flex-wrap gap-3">
-                {amenitiesList.map(a => (
-                  <button 
-                    key={a} onClick={() => toggleAmenity(a)}
-                    className={`px-6 py-4 rounded-2xl text-[10px] font-black border transition-all uppercase tracking-widest ${
-                      selectedAmenities.includes(a) 
-                        ? 'bg-kjc-accent text-white border-kjc-accent' 
-                        : 'bg-white/5 text-white/40 border-white/5 hover:border-white/20'
-                    }`}
+                  <button
+                    type="button"
+                    onClick={() => setPriceMax(50000)}
+                    className="text-[10px] font-black uppercase tracking-[0.2em] text-kjc-accent hover:opacity-80"
                   >
-                    {a}
+                    Reset
                   </button>
-                ))}
+                </div>
+
+                <input
+                  type="range"
+                  min="1000"
+                  max="50000"
+                  step="500"
+                  value={priceMax}
+                  onChange={(event) => setPriceMax(Number(event.target.value))}
+                  className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-kjc-accent"
+                />
+              </div>
+
+              <div className="space-y-5">
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                  Essentials
+                </label>
+
+                <div className="flex flex-wrap gap-3">
+                  {amenitiesList.map((amenity) => (
+                    <button
+                      key={amenity}
+                      type="button"
+                      onClick={() => toggleAmenity(amenity)}
+                      className={`rounded-2xl border px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${
+                        selectedAmenities.includes(amenity)
+                          ? "border-kjc-accent bg-kjc-accent text-white"
+                          : "border-white/5 bg-white/5 text-white/40 hover:border-white/20"
+                      }`}
+                    >
+                      {amenity}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <div className="grid gap-6">
         {loading ? (
-          [1,2].map(i => <div key={i} className="aspect-[16/10] bg-white/5 rounded-[48px] border border-white/10 animate-pulse" />)
+          [1, 2].map((item) => (
+            <div
+              key={item}
+              className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
+            />
+          ))
         ) : filtered.length === 0 ? (
-          <div className="text-center py-24 bg-white/5 rounded-[48px] border border-dashed border-white/10">
-             <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center mx-auto mb-8 text-white/20">
-                <Search size={32} />
-             </div>
-             <p className="text-white/30 font-black uppercase tracking-[0.3em] text-[10px]">No matches found in campus area</p>
-             <button 
-               onClick={() => { setCategory('All'); setPriceMax(50000); setSelectedAmenities([]); }}
-               className="text-kjc-accent font-black text-[11px] mt-6 uppercase tracking-[0.3em] hover:opacity-80"
-             >
-               Reset Filters
-             </button>
+          <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
+            <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-[32px] bg-white/5 text-white/20">
+              <Search size={32} />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
+              No rooms match this search
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setCategory("All");
+                setPriceMax(50000);
+                setSelectedAmenities([]);
+              }}
+              className="mt-6 text-[11px] font-black uppercase tracking-[0.25em] text-kjc-accent hover:opacity-80"
+            >
+              Reset filters
+            </button>
           </div>
         ) : (
           filtered.map((listing) => (
@@ -575,97 +733,140 @@ const RoomsPage = ({ listings, loading, onContact, showFilters, setShowFilters }
       </div>
     </div>
   );
-};
+}
 
-const MarketPage = ({ items, loading, onContact, showFilters, setShowFilters }: { items: MarketListing[], loading: boolean, onContact: any, showFilters: boolean, setShowFilters: (v: boolean) => void }) => {
-  const [category, setCategory] = useState('All');
+interface MarketPageProps {
+  items: MarketListing[];
+  loading: boolean;
+  onContact: ListingCardProps["onContact"];
+  showFilters: boolean;
+}
+
+function MarketPage({ items, loading, onContact, showFilters }: MarketPageProps) {
+  const [category, setCategory] = useState("All");
   const [priceMax, setPriceMax] = useState<number>(20000);
-  const [condition, setCondition] = useState('All');
+  const [condition, setCondition] = useState("All");
 
-  const filtered = items.filter(l => {
-    const categoryMatch = category === 'All' || l.category.toLowerCase() === category.toLowerCase();
-    const priceMatch = l.price <= priceMax;
-    const conditionMatch = condition === 'All' || l.condition === condition;
+  const filtered = items.filter((listing) => {
+    const categoryMatch = category === "All" || listing.category.toLowerCase() === category.toLowerCase();
+    const priceMatch = listing.price <= priceMax;
+    const conditionMatch = condition === "All" || listing.condition === condition;
+
     return categoryMatch && priceMatch && conditionMatch;
   });
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-1 mb-2">
-        <h2 className="text-4xl pro-heading tracking-tighter capitalize group flex items-center gap-3">
-          Campus <span className="text-kjc-accent italic">Deals</span>
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+      <div className="mb-2 flex flex-col gap-1">
+        <h2 className="flex items-center gap-3 text-4xl pro-heading tracking-tighter">
+          Search <span className="text-kjc-accent italic">CampusX</span>
+          <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
         </h2>
-        <p className="text-[10px] text-white/40 font-black uppercase tracking-[0.4em]">Essentials By Students For Students</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+          Find furniture, books, electronics and essentials
+        </p>
       </div>
 
-      <div className="flex overflow-x-auto gap-3 pb-3 scrollbar-hide py-1">
-        {['All', 'Furniture', 'Electronics', 'Books'].map(f => (
-          <button 
-            key={f} 
-            onClick={() => setCategory(f)}
-            className={`px-8 py-4 rounded-[24px] border text-[10px] font-black whitespace-nowrap transition-all uppercase tracking-[0.2em] ${
-              category === f ? 'bg-kjc-accent text-white border-kjc-accent shadow-lg shadow-kjc-accent/20' : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'
+      <div className="flex gap-3 overflow-x-auto py-1 pb-3 scrollbar-hide">
+        {["All", "Furniture", "Electronics", "Books", "Essentials"].map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setCategory(filter)}
+            className={`whitespace-nowrap rounded-[22px] border px-7 py-4 text-[10px] font-black uppercase tracking-[0.18em] transition-all ${
+              category === filter
+                ? "border-kjc-accent bg-kjc-accent text-white shadow-lg shadow-kjc-accent/20"
+                : "border-white/5 bg-white/5 text-white/40 hover:border-white/20"
             }`}
           >
-            {f}
+            {filter}
           </button>
         ))}
       </div>
 
       <AnimatePresence>
         {showFilters && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0, y: -20 }}
-            animate={{ height: 'auto', opacity: 1, y: 0 }}
-            exit={{ height: 0, opacity: 0, y: -20 }}
-            className="overflow-hidden bg-white/5 rounded-[48px] border border-white/10 shadow-pro p-10 space-y-10"
+          <motion.div
+            initial={{ height: 0, opacity: 0, y: -12 }}
+            animate={{ height: "auto", opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: -12 }}
+            className="overflow-hidden rounded-[40px] border border-white/10 bg-white/5 p-8 shadow-pro"
           >
-             <div className="space-y-5">
-              <div className="flex justify-between items-end">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Budget Limit</span>
-                  <p className="text-2xl font-display font-black text-white tracking-tighter">₹{priceMax.toLocaleString()}</p>
-                </div>
-                <button onClick={() => setPriceMax(20000)} className="text-[10px] font-black text-kjc-accent uppercase tracking-[0.2em]">Reset</button>
-              </div>
-              <input 
-                type="range" min="100" max="20000" step="100" value={priceMax}
-                onChange={(e) => setPriceMax(parseInt(e.target.value))}
-                className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-kjc-accent"
-              />
-            </div>
+            <div className="space-y-8">
+              <div className="space-y-5">
+                <div className="flex items-end justify-between">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                      Budget limit
+                    </span>
+                    <p className="font-display text-2xl font-black tracking-tighter text-white">
+                      ₹{priceMax.toLocaleString()}
+                    </p>
+                  </div>
 
-            <div className="space-y-6">
-              <label className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Condition Requirement</label>
-              <div className="flex flex-wrap gap-3">
-                {['All', 'New', 'Used'].map(c => (
-                  <button 
-                    key={c} onClick={() => setCondition(c)}
-                    className={`px-6 py-4 rounded-2xl text-[10px] font-black border transition-all uppercase tracking-widest ${
-                      condition === c 
-                        ? 'bg-kjc-accent text-white border-kjc-accent' 
-                        : 'bg-white/5 text-white/40 border-white/5 hover:border-white/20'
-                    }`}
+                  <button
+                    type="button"
+                    onClick={() => setPriceMax(20000)}
+                    className="text-[10px] font-black uppercase tracking-[0.2em] text-kjc-accent"
                   >
-                    {c}
+                    Reset
                   </button>
-                ))}
+                </div>
+
+                <input
+                  type="range"
+                  min="100"
+                  max="20000"
+                  step="100"
+                  value={priceMax}
+                  onChange={(event) => setPriceMax(Number(event.target.value))}
+                  className="h-1 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-kjc-accent"
+                />
+              </div>
+
+              <div className="space-y-5">
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                  Condition
+                </label>
+
+                <div className="flex flex-wrap gap-3">
+                  {["All", "New", "Like New", "Good", "Fair"].map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setCondition(item)}
+                      className={`rounded-2xl border px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${
+                        condition === item
+                          ? "border-kjc-accent bg-kjc-accent text-white"
+                          : "border-white/5 bg-white/5 text-white/40 hover:border-white/20"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <div className="grid gap-6">
         {loading ? (
-          [1,2].map(i => <div key={i} className="aspect-[16/10] bg-white/5 rounded-[48px] border border-white/10 animate-pulse" />)
+          [1, 2].map((item) => (
+            <div
+              key={item}
+              className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
+            />
+          ))
         ) : filtered.length === 0 ? (
-          <div className="text-center py-24 bg-white/5 rounded-[48px] border border-dashed border-white/10">
-             <div className="w-20 h-20 bg-white/5 rounded-[32px] flex items-center justify-center mx-auto mb-8 text-white/20">
-                <ShoppingBag size={32} />
-             </div>
-             <p className="text-white/30 font-black uppercase tracking-[0.3em] text-[10px]">Market is empty right now</p>
+          <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
+            <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-[32px] bg-white/5 text-white/20">
+              <ShoppingBag size={32} />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
+              Nothing here yet
+            </p>
           </div>
         ) : (
           filtered.map((item) => (
@@ -675,81 +876,106 @@ const MarketPage = ({ items, loading, onContact, showFilters, setShowFilters }: 
       </div>
     </div>
   );
-};
+}
 
-const CreateModal = ({ isOpen, onClose, onRefresh }: { isOpen: boolean, onClose: () => void, onRefresh: () => void }) => {
-  const [selectedType, setSelectedType] = useState<'housing' | 'market' | null>(null);
+interface CreateModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+}
+
+function CreateModal({ isOpen, onClose, onRefresh }: CreateModalProps) {
+  const [selectedType, setSelectedType] = useState<ListingType | null>(null);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
-          <motion.div 
+        <div className="fixed inset-0 z-[100] flex items-end justify-center p-4 sm:items-center">
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-kjc-black/80 backdrop-blur-md"
+            className="absolute inset-0 bg-black/80"
           />
-          <motion.div 
-            initial={{ y: '100%', scale: 0.95 }}
+
+          <motion.div
+            initial={{ y: "100%", scale: 0.97 }}
             animate={{ y: 0, scale: 1 }}
-            exit={{ y: '100%', scale: 0.95 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative bg-kjc-black w-full max-w-lg rounded-t-[56px] sm:rounded-[56px] p-12 overflow-hidden border border-white/10 shadow-pro-lg"
+            exit={{ y: "100%", scale: 0.97 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative w-full max-w-lg overflow-hidden rounded-t-[44px] border border-white/10 bg-black p-9 shadow-pro-lg sm:rounded-[44px]"
           >
             {selectedType ? (
-              <ListingForm 
-                type={selectedType} 
-                onClose={() => setSelectedType(null)} 
+              <ListingForm
+                type={selectedType}
+                onClose={() => setSelectedType(null)}
                 onSuccess={() => {
                   onRefresh();
                   onClose();
-                }} 
+                }}
               />
             ) : (
               <>
-                <div className="flex justify-between items-center mb-12">
+                <div className="mb-10 flex items-center justify-between">
                   <div className="space-y-1">
-                    <h2 className="text-4xl pro-heading tracking-tighter">Post <span className="text-kjc-accent italic">Ad</span></h2>
-                    <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">Verified Campus Listing</p>
+                    <h2 className="text-4xl pro-heading tracking-tighter">
+                      Create <span className="text-kjc-accent italic">post</span>
+                    </h2>
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/40">
+                      What are you posting?
+                    </p>
                   </div>
-                  <button onClick={onClose} className="w-14 h-14 bg-white/5 rounded-3xl flex items-center justify-center text-white/40 hover:text-white transition-all active:scale-90 border border-white/5">
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/40 transition-all hover:text-white active:scale-90"
+                    aria-label="Close create modal"
+                  >
                     <X size={28} />
                   </button>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-6">
-                  <button 
-                    onClick={() => setSelectedType('housing')}
-                    className="group flex flex-col p-10 rounded-[48px] border border-white/5 bg-white/5 text-left hover:bg-kjc-accent/10 hover:border-kjc-accent transition-all duration-500"
+
+                <div className="grid grid-cols-2 gap-5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedType("housing")}
+                    className="group flex flex-col rounded-[36px] border border-white/5 bg-white/5 p-8 text-left transition-all duration-300 hover:border-kjc-accent hover:bg-kjc-accent/10"
                   >
-                    <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-white mb-8 group-hover:bg-kjc-accent shadow-lg shadow-kjc-accent/10 transition-all">
+                    <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg transition-all group-hover:bg-kjc-accent">
                       <Home size={28} />
                     </div>
-                    <h3 className="pro-heading text-xl">Room</h3>
-                    <p className="text-[10px] text-white/30 font-black uppercase mt-1 tracking-widest leading-none">PG & FLAT</p>
+                    <h3 className="text-xl pro-heading">Room</h3>
+                    <p className="mt-1 text-[10px] font-black uppercase leading-none tracking-widest text-white/30">
+                      PG & Flat
+                    </p>
                   </button>
-                  
-                  <button 
-                    onClick={() => setSelectedType('market')}
-                    className="group flex flex-col p-10 rounded-[48px] border border-white/5 bg-white/5 text-left hover:bg-rose-500/10 hover:border-rose-500 transition-all duration-500"
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedType("market")}
+                    className="group flex flex-col rounded-[36px] border border-white/5 bg-white/5 p-8 text-left transition-all duration-300 hover:border-rose-500 hover:bg-rose-500/10"
                   >
-                    <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center text-white mb-8 group-hover:bg-rose-500 shadow-lg shadow-rose-500/10 transition-all">
+                    <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-white shadow-lg transition-all group-hover:bg-rose-500">
                       <ShoppingBag size={28} />
                     </div>
-                    <h3 className="pro-heading text-xl">Stuff</h3>
-                    <p className="text-[10px] text-white/30 font-black uppercase mt-1 tracking-widest leading-none">BUY & SELL</p>
+                    <h3 className="text-xl pro-heading">Item</h3>
+                    <p className="mt-1 text-[10px] font-black uppercase leading-none tracking-widest text-white/30">
+                      Buy & Sell
+                    </p>
                   </button>
                 </div>
-                
-                <div className="mt-12 pt-10 border-t border-white/5 flex items-center gap-6">
-                  <div className="w-14 h-14 bg-kjc-accent/10 rounded-[24px] flex items-center justify-center text-kjc-accent border border-kjc-accent/20">
+
+                <div className="mt-10 flex items-center gap-5 border-t border-white/5 pt-8">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-[24px] border border-kjc-accent/20 bg-kjc-accent/10 text-kjc-accent">
                     <CheckCircle2 size={28} />
                   </div>
                   <div>
-                    <p className="text-sm pro-heading">Secure Marketplace</p>
-                    <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.2em] leading-tight">Jayantians Protection Active</p>
+                    <p className="text-sm pro-heading">Campus verified posting</p>
+                    <p className="text-[10px] font-black uppercase leading-tight tracking-[0.2em] text-white/30">
+                      Safer than random WhatsApp forwards
+                    </p>
                   </div>
                 </div>
               </>
@@ -759,59 +985,43 @@ const CreateModal = ({ isOpen, onClose, onRefresh }: { isOpen: boolean, onClose:
       )}
     </AnimatePresence>
   );
-};
+}
 
 export default function Shell() {
-  const [activeTab, setActiveTab] = useState<Tab>('rooms');
+  const [activeTab, setActiveTab] = useState<Tab>("home");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
   const [marketData, setMarketData] = useState<MarketListing[]>([]);
-  const [savedData, setSavedData] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   const { user, profile, signIn, logout } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user, activeTab]);
+    loadData();
+  }, [activeTab]);
 
   const loadData = async () => {
     setLoading(true);
+
     try {
-      if (activeTab === 'rooms') {
+      if (activeTab === "home") {
         const data = await getHousingListings();
         setHousingData(data);
-      } else if (activeTab === 'market') {
-        const data = await getMarketListings();
-        setMarketData(data);
-      } else if (activeTab === 'saved') {
-        if (!user) {
-          setSavedData([]);
-          setLoading(false);
-          return;
-        }
-        const saved = await getSavedListings();
-        const allHousing = await getHousingListings();
-        const allMarket = await getMarketListings();
-        
-        const merged = saved.map(s => {
-          const item = s.listingType === 'housing' 
-            ? allHousing.find(h => h.id === s.listingId)
-            : allMarket.find(m => m.id === s.listingId);
-          return item ? { ...item, savedId: s.id, listingType: s.listingType } : null;
-        }).filter(Boolean);
-        
-        setSavedData(merged);
       }
-    } catch (err) {
-      console.error('Error loading data:', err);
+
+      if (activeTab === "search") {
+        const [housing, market] = await Promise.all([getHousingListings(), getMarketListings()]);
+        setHousingData(housing);
+        setMarketData(market);
+      }
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleContact = async (ownerId: string, listingId: string, title: string, type: string) => {
@@ -819,243 +1029,270 @@ export default function Shell() {
       await signIn();
       return;
     }
+
     try {
-      const convId = await startConversation(ownerId, listingId, title, type);
-      setActiveTab('messages');
+      await startConversation(ownerId, listingId, title, type);
+      setActiveTab("inbox");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : 'Error starting chat');
+      alert(error instanceof Error ? error.message : "Could not start chat");
     }
   };
 
-  const getTitle = () => {
-    switch(activeTab) {
-      case 'rooms': return 'KJC Rooms';
-      case 'market': return 'Campus Market';
-      case 'saved': return 'Saved Items';
-      case 'messages': return 'Messages';
-      case 'profile': return 'Profile';
-      default: return 'KJC Connect';
-    }
-  };
+  const filterBySearch = <T extends { title: string; description?: string }>(items: T[]) => {
+    if (!searchQuery.trim()) return items;
 
-  const filterBySearch = (items: any[]) => {
-    if (!searchQuery) return items;
-    return items.filter(i => 
-      i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      i.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    const query = searchQuery.toLowerCase();
+
+    return items.filter(
+      (item) =>
+        item.title.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query)
     );
   };
 
   const renderLoginPrompt = () => (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-white relative font-sans">
-      <div className="absolute top-[-10%] right-[-10%] w-[80%] max-w-sm aspect-square bg-kjc-accent/20 rounded-full blur-[120px] animate-pulse" />
-      
-      <div className="max-w-sm w-full text-center relative z-10 space-y-10">
+    <div className="relative flex min-h-[60vh] flex-col items-center justify-center p-8 text-white">
+      <div className="absolute right-[-10%] top-[-10%] aspect-square w-[80%] max-w-sm animate-pulse rounded-full bg-kjc-accent/20 blur-[120px]" />
+
+      <div className="relative z-10 w-full max-w-sm space-y-10 text-center">
         <div className="space-y-4">
-          <div className="w-24 h-24 bg-gradient-to-br from-kjc-accent to-blue-600 rounded-[36px] mx-auto mb-6 flex items-center justify-center text-white shadow-[0_20px_50px_rgba(139,92,246,0.3)] ring-1 ring-white/20">
-            <span className="text-4xl font-black">K</span>
+          <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-[36px] bg-gradient-to-br from-kjc-accent to-blue-600 text-white shadow-[0_20px_50px_rgba(139,92,246,0.3)] ring-1 ring-white/20">
+            <span className="text-4xl font-black">X</span>
           </div>
-          <h2 className="text-4xl font-display tracking-tighter block mb-2">Auth <span className="text-kjc-accent italic">Required</span></h2>
-          <p className="text-slate-400 text-[10px] leading-relaxed font-black uppercase tracking-[0.4em] opacity-80 block">
-             Kristu Jayanti College
+
+          <h2 className="mb-2 block text-4xl font-display tracking-tighter">
+            Sign in <span className="text-kjc-accent italic">to continue</span>
+          </h2>
+
+          <p className="block text-[10px] font-black uppercase leading-relaxed tracking-[0.35em] text-white/35">
+            CampusX needs your profile for posting and chats
           </p>
         </div>
-        
-        <button 
+
+        <button
+          type="button"
           onClick={signIn}
-          className="w-full bg-white text-kjc-black py-6 rounded-[32px] font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-4 hover:bg-kjc-slate-50 active:scale-[0.96] transition-all shadow-pro-lg relative overflow-hidden group"
+          className="group relative flex w-full items-center justify-center gap-4 overflow-hidden rounded-[32px] bg-white py-6 text-[10px] font-black uppercase tracking-widest text-black shadow-pro-lg transition-all hover:bg-kjc-slate-50 active:scale-[0.96]"
         >
-          Sign in with Campus Mail
+          Sign in with Google
         </button>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-kjc-black pb-32 atmo-bg">
-      <Header 
-        title={getTitle()} 
+    <div className="min-h-screen bg-black pb-32 text-white atmo-bg">
+      <Header
         activeTab={activeTab}
-        onSearch={setSearchQuery} 
-        onFilterClick={() => setShowFilters(!showFilters)} 
+        onSearch={setSearchQuery}
+        onFilterClick={() => setShowFilters((prev) => !prev)}
         showFilters={showFilters}
       />
-      <main className="max-w-xl mx-auto px-6 py-12">
-        {profile?.verifiedStatus !== 'verified' && activeTab !== 'profile' && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
+
+      <main className="mx-auto max-w-xl px-6 py-10">
+        {profile?.verifiedStatus !== "verified" && activeTab !== "me" && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-12 p-[1.5px] bg-gradient-to-r from-kjc-accent to-blue-600 rounded-[48px] shadow-pro overflow-hidden"
+            className="mb-10 overflow-hidden rounded-[40px] bg-gradient-to-r from-kjc-accent to-blue-600 p-[1.5px] shadow-pro"
           >
-            <div className="bg-kjc-black/90 backdrop-blur-xl rounded-[47px] p-8 flex items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div className="w-14 h-14 bg-kjc-accent/10 rounded-3xl flex items-center justify-center text-kjc-accent border border-kjc-accent/20">
+            <div className="flex items-center justify-between gap-5 rounded-[39px] bg-black/95 p-6">
+              <div className="flex items-center gap-5">
+                <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-kjc-accent/20 bg-kjc-accent/10 text-kjc-accent">
                   <ShieldCheck size={30} />
                 </div>
+
                 <div>
-                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Security Breach Prevention</p>
-                   <p className="text-[12px] text-white font-bold tracking-tight mt-1">Identity Verification Required</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">
+                    Verify your profile
+                  </p>
+                  <p className="mt-1 text-[12px] font-bold tracking-tight text-white">
+                    Unlock trusted campus access
+                  </p>
                 </div>
               </div>
-              <button 
+
+              <button
+                type="button"
                 onClick={() => setVerificationModalOpen(true)}
-                className="bg-white text-kjc-black px-8 py-4 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] hover:bg-white/90 active:scale-95 transition-all shadow-lg"
+                className="rounded-2xl bg-white px-7 py-4 text-[9px] font-black uppercase tracking-[0.18em] text-black shadow-lg transition-all hover:bg-white/90 active:scale-95"
               >
                 Verify
               </button>
             </div>
           </motion.div>
         )}
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+            transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
           >
-            {activeTab === 'rooms' && (
-              <RoomsPage 
-                listings={filterBySearch(housingData)} 
-                loading={loading} 
+            {activeTab === "home" && (
+              <RoomsPage
+                listings={filterBySearch(housingData)}
+                loading={loading}
                 onContact={handleContact}
                 showFilters={showFilters}
-                setShowFilters={setShowFilters}
               />
             )}
-            {activeTab === 'market' && (
-              <MarketPage 
-                items={filterBySearch(marketData)} 
-                loading={loading} 
-                onContact={handleContact}
-                showFilters={showFilters}
-                setShowFilters={setShowFilters}
-              />
-            )}
-            
-            {(!user && ['saved', 'messages', 'profile'].includes(activeTab)) ? renderLoginPrompt() : (
-              <>
-                {activeTab === 'saved' && (
-              <div className="space-y-8">
-                <div className="flex flex-col gap-1 mb-4">
-                  <h2 className="text-4xl pro-heading tracking-tighter uppercase whitespace-nowrap">
-                    Library <span className="text-kjc-accent italic">Saved</span>
-                  </h2>
-                  <p className="text-[10px] text-white/40 font-black uppercase tracking-[0.4em]">Your Private Collection</p>
-                </div>
-                {savedData.length === 0 ? (
-                  <div className="text-center py-32 px-12 bg-white/5 rounded-[48px] border border-dashed border-white/10">
-                    <div className="w-24 h-24 bg-white/5 rounded-[36px] mx-auto mb-8 flex items-center justify-center text-white/10">
-                        <Bookmark size={40} strokeWidth={1} />
-                    </div>
-                    <p className="text-white/30 text-[10px] font-black uppercase tracking-[0.3em]">Vault is currently empty</p>
-                  </div>
-                ) : (
-                  savedData.map(item => (
-                    <ListingCard key={item.id} listing={item} type={item.listingType} onContact={handleContact} />
-                  ))
-                )}
-              </div>
-            )}
-            {activeTab === 'messages' && <Chattery />}
-            {activeTab === 'profile' && (
-              <div className="space-y-10 pb-16">
-                <div className="bg-white/5 border border-white/10 rounded-[56px] p-10 sm:p-12 relative overflow-hidden group shadow-pro-lg">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-kjc-accent/10 rounded-full blur-[100px] -translate-y-20 translate-x-20" />
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="relative mb-8">
-                      <div className="absolute -inset-6 bg-gradient-to-tr from-kjc-accent to-blue-600 rounded-full blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <div className="w-32 h-32 rounded-[48px] bg-white/10 overflow-hidden ring-4 ring-white/10 shadow-2xl relative z-10 border border-white/20">
-                         {profile?.photoURL ? (
-                           <img src={profile.photoURL} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-kjc-navy to-kjc-accent flex items-center justify-center text-white text-4xl font-black italic">
-                              {profile?.displayName?.charAt(0)}
-                            </div>
-                          )}
-                      </div>
-                    </div>
-                    <h2 className="pro-heading text-4xl mb-3 tracking-tighter">{profile?.displayName}</h2>
-                    <div className="flex flex-wrap justify-center gap-3 mt-2">
-                       <span className="px-6 py-2.5 bg-white/5 text-white/60 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] border border-white/5">{profile?.campusRole || 'Student'}</span>
-                       {profile?.verifiedStatus === 'verified' ? (
-                         <span className="px-6 py-2.5 bg-emerald-500/10 text-emerald-400 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] border border-emerald-500/20 flex items-center gap-2">
-                           <ShieldCheck size={14} strokeWidth={3} />
-                           Verified
-                         </span>
-                       ) : (
-                         <span className="px-6 py-2.5 bg-rose-500/10 text-rose-400 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] border border-rose-500/20">
-                           Identity Restricted
-                         </span>
-                       )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="grid gap-6">
-                  {[
-                    { label: 'Asset Library', icon: Home, color: 'bg-indigo-500/10 text-indigo-400', sub: 'Posts you published', onClick: () => {
-                      setActiveTab('rooms');
-                      setSearchQuery(profile?.displayName || '');
-                    } },
-                    { label: 'Campus Map', icon: MapPin, color: 'bg-blue-500/10 text-blue-400', sub: 'KJC Campus Directions' },
-                    { label: 'Privacy Vault', icon: ShieldCheck, color: 'bg-emerald-500/10 text-emerald-400', sub: 'Trusted Student Network' },
-                    { label: 'System Pulse', icon: TrendingUp, color: 'bg-orange-500/10 text-orange-400', sub: 'Campus Analytics' }
-                  ].map(item => (
-                    <button 
-                      key={item.label} 
-                      onClick={(item as any).onClick}
-                      className="w-full flex items-center gap-6 p-8 bg-white/5 border border-white/5 rounded-[48px] transition-all hover:bg-white/[0.08] hover:border-white/10 text-left group active:scale-[0.98]"
-                    >
-                      <div className={`w-16 h-16 rounded-[28px] flex items-center justify-center ${item.color} group-hover:scale-110 transition-transform shadow-lg border border-white/5`}>
-                        <item.icon size={28} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-black text-white tracking-tighter text-xl">{item.label}</p>
-                        <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.2em] mt-1">{item.sub}</p>
-                      </div>
-                      <ChevronRight size={22} className="text-white/20 group-hover:translate-x-1 group-hover:text-kjc-accent transition-all" />
-                    </button>
-                  ))}
-                </div>
 
-                <div className="px-4">
-                  <button 
-                    onClick={logout}
-                    className="w-full py-8 rounded-[48px] bg-rose-500/10 border border-rose-500/20 text-rose-500 text-[10px] font-black uppercase tracking-[0.5em] hover:bg-rose-500/20 transition-all flex items-center justify-center gap-4 active:scale-[0.96] shadow-xl shadow-rose-500/5 group"
-                  >
-                    Terminate Session
-                    <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-2 transition-all" />
-                  </button>
-                </div>
-              </div>
+            {activeTab === "search" && (
+              <MarketPage
+                items={filterBySearch(marketData)}
+                loading={loading}
+                onContact={handleContact}
+                showFilters={showFilters}
+              />
             )}
+
+            {!user && ["inbox", "me"].includes(activeTab) ? (
+              renderLoginPrompt()
+            ) : (
+              <>
+                {activeTab === "inbox" && <Chattery />}
+
+                {activeTab === "me" && (
+                  <div className="space-y-10 pb-16">
+                    <div className="group relative overflow-hidden rounded-[44px] border border-white/10 bg-white/5 p-9 shadow-pro-lg">
+                      <div className="absolute right-0 top-0 h-64 w-64 -translate-y-20 translate-x-20 rounded-full bg-kjc-accent/10 blur-[100px]" />
+
+                      <div className="relative z-10 flex flex-col items-center text-center">
+                        <div className="relative mb-8">
+                          <div className="absolute -inset-6 rounded-full bg-gradient-to-tr from-kjc-accent to-blue-600 opacity-20 blur-2xl transition-opacity group-hover:opacity-40" />
+
+                          <div className="relative z-10 h-32 w-32 overflow-hidden rounded-[44px] border border-white/20 bg-white/10 shadow-2xl ring-4 ring-white/10">
+                            {profile?.photoURL ? (
+                              <img
+                                src={profile.photoURL}
+                                alt={profile.displayName}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-kjc-accent to-blue-600 text-4xl font-black italic text-white">
+                                {profile?.displayName?.charAt(0) || "X"}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <h2 className="mb-3 text-4xl pro-heading tracking-tighter">
+                          {profile?.displayName || "CampusX User"}
+                        </h2>
+
+                        <div className="mt-2 flex flex-wrap justify-center gap-3">
+                          <span className="rounded-2xl border border-white/5 bg-white/5 px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] text-white/60">
+                            {profile?.campusRole || "Student"}
+                          </span>
+
+                          {profile?.verifiedStatus === "verified" ? (
+                            <span className="flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-400">
+                              <ShieldCheck size={14} strokeWidth={3} />
+                              Campus verified
+                            </span>
+                          ) : (
+                            <span className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] text-rose-400">
+                              Not verified
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-5">
+                      {[
+                        {
+                          label: "My posts",
+                          icon: Home,
+                          color: "bg-indigo-500/10 text-indigo-400",
+                          sub: "Rooms and items you posted",
+                          onClick: () => setActiveTab("home"),
+                        },
+                        {
+                          label: "Saved posts",
+                          icon: Bookmark,
+                          color: "bg-blue-500/10 text-blue-400",
+                          sub: "Coming soon",
+                        },
+                        {
+                          label: "Privacy",
+                          icon: ShieldCheck,
+                          color: "bg-emerald-500/10 text-emerald-400",
+                          sub: "Block and report settings",
+                        },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={item.onClick}
+                          className="group flex w-full items-center gap-6 rounded-[40px] border border-white/5 bg-white/5 p-7 text-left transition-all hover:border-white/10 hover:bg-white/[0.08] active:scale-[0.98]"
+                        >
+                          <div
+                            className={`flex h-16 w-16 items-center justify-center rounded-[28px] border border-white/5 shadow-lg transition-transform group-hover:scale-110 ${item.color}`}
+                          >
+                            <item.icon size={28} />
+                          </div>
+
+                          <div className="flex-1">
+                            <p className="text-xl font-black tracking-tighter text-white">
+                              {item.label}
+                            </p>
+                            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/30">
+                              {item.sub}
+                            </p>
+                          </div>
+
+                          <ChevronRight
+                            size={22}
+                            className="text-white/20 transition-all group-hover:translate-x-1 group-hover:text-kjc-accent"
+                          />
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="px-2">
+                      <button
+                        type="button"
+                        onClick={logout}
+                        className="group flex w-full items-center justify-center gap-4 rounded-[40px] border border-rose-500/20 bg-rose-500/10 py-7 text-[10px] font-black uppercase tracking-[0.35em] text-rose-500 shadow-xl shadow-rose-500/5 transition-all hover:bg-rose-500/20 active:scale-[0.96]"
+                      >
+                        Log out
+                        <ChevronRight
+                          size={16}
+                          className="opacity-0 transition-all group-hover:translate-x-2 group-hover:opacity-100"
+                        />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </motion.div>
         </AnimatePresence>
       </main>
-      
-      <BottomNav 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
+
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         onAddClick={() => {
           if (!user) {
             signIn();
-          } else {
-            setIsModalOpen(true);
+            return;
           }
-        }} 
+
+          setIsModalOpen(true);
+        }}
       />
 
-      <AnimatePresence>
-        {isModalOpen && <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />}
-      </AnimatePresence>
+      <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
 
-      <VerificationModal 
-        isOpen={verificationModalOpen} 
-        onClose={() => setVerificationModalOpen(false)} 
+      <VerificationModal
+        isOpen={verificationModalOpen}
+        onClose={() => setVerificationModalOpen(false)}
       />
     </div>
   );
