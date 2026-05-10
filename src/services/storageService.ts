@@ -16,10 +16,18 @@ export async function uploadMultipleImages(
     throw new Error("You must be signed in to upload images.");
   }
 
+  const tokenResult = await user.getIdTokenResult(true);
+
+  console.log("Firebase UID:", user.uid);
+  console.log("Firebase claims:", tokenResult.claims);
+
   return Promise.all(files.map((file) => uploadImage(file, user.uid, folder)));
 }
 
-export async function uploadProfilePhoto(file: File, userId?: string): Promise<string> {
+export async function uploadProfilePhoto(
+  file: File,
+  userId?: string
+): Promise<string> {
   const user = auth.currentUser;
 
   if (!user) {
@@ -29,6 +37,11 @@ export async function uploadProfilePhoto(file: File, userId?: string): Promise<s
   if (userId && user.uid !== userId) {
     throw new Error("You can only upload your own profile photo.");
   }
+
+  const tokenResult = await user.getIdTokenResult(true);
+
+  console.log("Firebase UID:", user.uid);
+  console.log("Firebase claims:", tokenResult.claims);
 
   return uploadImage(file, user.uid, "profiles");
 }
@@ -44,6 +57,13 @@ async function uploadImage(
   const fileName = `${crypto.randomUUID()}.${extension}`;
   const path = `${userId}/${folder}/${fileName}`;
 
+  console.log("Uploading image to Supabase:", {
+    bucket: BUCKET,
+    path,
+    type: file.type,
+    size: file.size,
+  });
+
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: "31536000",
     upsert: false,
@@ -51,7 +71,8 @@ async function uploadImage(
   });
 
   if (error) {
-    throw new Error(error.message);
+    console.error("Supabase upload error:", error);
+    throw new Error(`Storage upload failed: ${error.message}`);
   }
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);

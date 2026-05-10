@@ -1,5 +1,13 @@
 import admin from "firebase-admin";
-import serviceAccount from "./firebase-service-account.json" assert { type: "json" };
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const serviceAccountPath = join(__dirname, "firebase-service-account.json");
+const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -16,4 +24,4 @@ await admin.auth().setCustomUserClaims(uid, {
   role: "authenticated",
 });
 
-console.log(`Set role=authenticated for ${uid}`);
+console.log(`✅ Set role=authenticated for ${uid}`);
