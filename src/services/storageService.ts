@@ -1,7 +1,5 @@
 import { auth } from "../lib/firebase";
-import { supabase } from "../lib/supabase";
 
-const BUCKET = "campusx-images";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 type ImageFolder = "profiles" | "housing" | "marketplace";
@@ -47,51 +45,52 @@ async function uploadImage(file: File, folder: ImageFolder): Promise<string> {
 
   const firebaseToken = await user.getIdToken(true);
 
-  const signedUrlResponse = await fetch("/api/create-signed-upload-url", {
+  const response = await fetch("/api/upload-image", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${firebaseToken}`,
+      "Content-Type": file.type,
+      "x-campusx-folder": folder,
     },
-    body: JSON.stringify({
-      folder,
-      contentType: file.type,
-    }),
+    body: file,
   });
 
-  const signedUrlPayload = await signedUrlResponse.json();
+  const rawResponse = await response.text();
 
-  if (!signedUrlResponse.ok) {
+  let payload: {
+    publicUrl?: string;
+    path?: string;
+    originalBytes?: number;
+    compressedBytes?: number;
+    error?: string;
+  };
+
+  try {
+    payload = JSON.parse(rawResponse);
+  } catch {
     throw new Error(
-      signedUrlPayload?.error || "Could not create signed upload URL."
+      `Upload API did not return JSON. Status: ${response.status}. Response: ${rawResponse.slice(
+        0,
+        140
+      )}`
     );
   }
 
-  const { path, token, publicUrl } = signedUrlPayload as {
-    path: string;
-    token: string;
-    publicUrl: string;
-  };
-
-  console.log("Uploading with signed URL:", {
-    bucket: BUCKET,
-    path,
-    type: file.type,
-    size: file.size,
-  });
-
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .uploadToSignedUrl(path, token, file, {
-      contentType: file.type,
-    });
-
-  if (error) {
-    console.error("Supabase signed upload error:", error);
-    throw new Error(`Storage upload failed: ${error.message}`);
+  if (!response.ok) {
+    throw new Error(payload.error || "Image upload failed.");
   }
 
-  return publicUrl;
+  if (!payload.publicUrl) {
+    throw new Error("Upload response missing public URL.");
+  }
+
+  console.log("Server image compression:", {
+    path: payload.path,
+    original: formatBytes(payload.originalBytes || file.size),
+    compressed: formatBytes(payload.compressedBytes || 0),
+  });
+
+  return payload.publicUrl;
 }
 
 function validateImage(file: File) {
@@ -104,4 +103,10 @@ function validateImage(file: File) {
   if (file.size > MAX_IMAGE_SIZE) {
     throw new Error("Image must be under 5MB.");
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
