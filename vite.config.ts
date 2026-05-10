@@ -10,20 +10,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: [
-        "icons/icon-192.png",
-        "icons/icon-512.png",
-        "og-image.png",
-      ],
+      includeAssets: ["icons/icon-192.png", "icons/icon-512.png", "og-image.png"],
       manifest: {
-        name: "KJC Connect",
-        short_name: "KJC",
+        name: "CampusX",
+        short_name: "CampusX",
         description:
-          "Find trusted rooms, flatmates, furniture, and essentials from verified Kristu Jayanti students and alumni.",
-        theme_color: "#0F172A",
-        background_color: "#0F172A",
+          "Find rooms near KJC on a map, see distance from college, and ping verified posters safely.",
+        theme_color: "#000000",
+        background_color: "#000000",
         display: "standalone",
-        display_override: ["window-controls-overlay", "standalone"],
         orientation: "portrait",
         lang: "en-IN",
         start_url: "/",
@@ -41,26 +36,6 @@ export default defineConfig({
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable any",
-          },
-        ],
-        shortcuts: [
-          {
-            name: "Post Listing",
-            short_name: "Post",
-            url: "/",
-            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
-          },
-          {
-            name: "Find Housing",
-            short_name: "Rooms",
-            url: "/",
-            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
-          },
-          {
-            name: "Messages",
-            short_name: "Chat",
-            url: "/",
-            icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }],
           },
         ],
       },
