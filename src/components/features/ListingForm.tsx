@@ -248,12 +248,17 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
       setUploadStatus("Posted successfully");
       onSuccess();
     } catch (error) {
-      console.error("Listing creation failed:", error);
-      alert("Failed to create listing. Please check rules, storage, and try again.");
-    } finally {
-      setLoading(false);
-      setUploadStatus("");
-    }
+  console.error("Listing creation failed:", error);
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : JSON.stringify(error);
+
+  alert(message || "Failed to create listing.");
+}
   };
 
   return (
