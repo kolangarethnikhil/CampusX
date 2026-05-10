@@ -398,17 +398,20 @@ function RoomsPage({
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
 }) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const isMapMode = viewMode === "map";
 
   return (
-    <div className="space-y-8">
-      <div className="mb-2 flex flex-col gap-1">
-        <h2 className="flex items-center gap-3 text-4xl pro-heading tracking-tighter">
-          Housing <span className="text-kjc-accent italic">near KJU</span>
-        </h2>
-        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
-          Rooms, PGs and flats posted by students
-        </p>
-      </div>
+    <div className={isMapMode ? "space-y-4" : "space-y-8"}>
+      {!isMapMode && (
+        <div className="mb-2 flex flex-col gap-1">
+          <h2 className="flex items-center gap-3 text-4xl pro-heading tracking-tighter">
+            Housing <span className="text-kjc-accent italic">near KJU</span>
+          </h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
+            Rooms, PGs and flats posted by students
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 rounded-[26px] border border-white/5 bg-white/5 p-2">
         <button
@@ -432,7 +435,7 @@ function RoomsPage({
         </button>
       </div>
 
-      {viewMode === "map" ? (
+      {isMapMode ? (
         <HousingMapView
           listings={listings}
           onOpenDetails={(listing) => onOpenDetails(listing, "housing")}
