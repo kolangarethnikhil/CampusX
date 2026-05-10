@@ -3,8 +3,6 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
   Bookmark,
-  CheckCircle2,
-  ChevronRight,
   Filter,
   Home,
   MapPin,
@@ -12,7 +10,6 @@ import {
   Plus,
   Search,
   Send,
-  ShieldCheck,
   ShoppingBag,
   User,
   X,
@@ -37,6 +34,7 @@ import ListingForm from "../features/ListingForm";
 import VerificationModal from "../features/VerificationModal";
 import ListingDetailModal from "../features/ListingDetailModal";
 import UserProfilePreview from "../features/UserProfilePreview";
+import HousingMapView from "../features/HousingMapView";
 import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 
 type Tab = "home" | "search" | "inbox" | "me";
@@ -388,8 +386,6 @@ function ListingCard({
   );
 }
 
-/* Keep rest below simple and valid */
-
 function RoomsPage({
   listings,
   loading,
@@ -401,6 +397,8 @@ function RoomsPage({
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
 }) {
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+
   return (
     <div className="space-y-8">
       <div className="mb-2 flex flex-col gap-1">
@@ -412,32 +410,62 @@ function RoomsPage({
         </p>
       </div>
 
-      <div className="grid gap-6">
-        {loading ? (
-          [1, 2].map((item) => (
-            <div
-              key={item}
-              className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
-            />
-          ))
-        ) : listings.length === 0 ? (
-          <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
-              No rooms yet
-            </p>
-          </div>
-        ) : (
-          listings.map((listing) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              type="housing"
-              onContact={onContact}
-              onOpenDetails={onOpenDetails}
-            />
-          ))
-        )}
+      <div className="grid grid-cols-2 gap-3 rounded-[26px] border border-white/5 bg-white/5 p-2">
+        <button
+          type="button"
+          onClick={() => setViewMode("list")}
+          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] ${
+            viewMode === "list" ? "bg-white text-black" : "text-white/40"
+          }`}
+        >
+          List
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewMode("map")}
+          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] ${
+            viewMode === "map" ? "bg-white text-black" : "text-white/40"
+          }`}
+        >
+          Map
+        </button>
       </div>
+
+      {viewMode === "map" ? (
+        <HousingMapView
+          listings={listings}
+          onOpenDetails={(listing) => onOpenDetails(listing, "housing")}
+          onContact={onContact}
+        />
+      ) : (
+        <div className="grid gap-6">
+          {loading ? (
+            [1, 2].map((item) => (
+              <div
+                key={item}
+                className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
+              />
+            ))
+          ) : listings.length === 0 ? (
+            <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
+                No rooms yet
+              </p>
+            </div>
+          ) : (
+            listings.map((listing) => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                type="housing"
+                onContact={onContact}
+                onOpenDetails={onOpenDetails}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -726,11 +754,15 @@ function Chattery({
             const name = otherUser?.displayName || "CampusX user";
 
             return (
-              <button
+              <div
                 key={conversation.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedChat(conversation)}
-                className="flex w-full items-center gap-5 rounded-[40px] border border-white/5 bg-white/5 p-6 text-left"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") setSelectedChat(conversation);
+                }}
+                className="flex w-full cursor-pointer items-center gap-5 rounded-[40px] border border-white/5 bg-white/5 p-6 text-left"
               >
                 <button
                   type="button"
@@ -758,7 +790,7 @@ function Chattery({
                     {conversation.lastMessage || "Start chatting..."}
                   </p>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -946,7 +978,10 @@ export default function Shell() {
         isOpen={Boolean(selectedListing)}
         listing={selectedListing}
         type={selectedListingType}
-        onClose={() => setSelectedListing(null)}
+        onClose={() => {
+          setSelectedListing(null);
+          setSelectedPoster(null);
+        }}
         onContact={handleContact}
         poster={selectedPoster}
         onOpenPoster={() => {
