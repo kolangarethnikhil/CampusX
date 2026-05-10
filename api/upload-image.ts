@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import admin from "firebase-admin";
 import sharp from "sharp";
+import WebSocket from "ws";
 
 const BUCKET = "campusx-images";
 const MAX_INPUT_SIZE = 5 * 1024 * 1024;
@@ -39,6 +40,9 @@ function getSupabaseAdmin() {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    realtime: {
+      transport: WebSocket as any,
     },
   });
 }
