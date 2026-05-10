@@ -17,8 +17,10 @@ import {
   User,
   X,
 } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../lib/firebase";
 import { getHousingListings, HousingListing } from "../../services/housingService";
 import { getMarketListings, MarketListing } from "../../services/marketService";
 import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
@@ -35,16 +37,22 @@ import ListingForm from "../features/ListingForm";
 import VerificationModal from "../features/VerificationModal";
 
 type Tab = "home" | "search" | "inbox" | "me";
-
 type ListingType = "housing" | "market";
 
-interface BottomNavProps {
+type UserLite = {
+  displayName: string;
+  photoURL?: string;
+};
+
+function BottomNav({
+  activeTab,
+  onTabChange,
+  onAddClick,
+}: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   onAddClick: () => void;
-}
-
-function BottomNav({ activeTab, onTabChange, onAddClick }: BottomNavProps) {
+}) {
   const tabs = [
     { id: "home", icon: Home, label: "Home" },
     { id: "search", icon: Search, label: "Search" },
@@ -63,7 +71,7 @@ function BottomNav({ activeTab, onTabChange, onAddClick }: BottomNavProps) {
             if (tab.id === "add") onAddClick();
             else onTabChange(tab.id as Tab);
           }}
-          className={`relative flex flex-col items-center justify-center transition-all duration-300 active:scale-90 ${
+          className={`relative flex items-center justify-center transition-all duration-300 active:scale-90 ${
             tab.special
               ? "h-16 w-16 -mt-5 scale-110 rounded-full bg-kjc-accent text-white shadow-lg shadow-kjc-accent/30"
               : `h-14 w-14 rounded-full ${
@@ -88,14 +96,17 @@ function BottomNav({ activeTab, onTabChange, onAddClick }: BottomNavProps) {
   );
 }
 
-interface HeaderProps {
+function Header({
+  activeTab,
+  onSearch,
+  onFilterClick,
+  showFilters,
+}: {
   activeTab: Tab;
   onSearch: (value: string) => void;
   onFilterClick: () => void;
   showFilters: boolean;
-}
-
-function Header({ activeTab, onSearch, onFilterClick, showFilters }: HeaderProps) {
+}) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchVal, setSearchVal] = useState("");
 
@@ -115,8 +126,9 @@ function Header({ activeTab, onSearch, onFilterClick, showFilters }: HeaderProps
                 </h1>
                 <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-kjc-accent" />
               </div>
+
               <p className="mt-1 text-[9px] font-black uppercase tracking-[0.3em] text-white/30">
-                KJC campus housing & essentials
+                KJU campus housing & essentials
               </p>
             </motion.div>
 
@@ -185,13 +197,15 @@ function Header({ activeTab, onSearch, onFilterClick, showFilters }: HeaderProps
   );
 }
 
-interface ListingCardProps {
+function ListingCard({
+  listing,
+  type,
+  onContact,
+}: {
   listing: HousingListing | MarketListing;
   type: ListingType;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
-}
-
-function ListingCard({ listing, type, onContact }: ListingCardProps) {
+}) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
   const { user, signIn } = useAuth();
@@ -319,7 +333,9 @@ function ListingCard({ listing, type, onContact }: ListingCardProps) {
           <div className="flex items-center gap-2.5 text-white/45">
             <MapPin size={14} className="shrink-0 text-kjc-accent" />
             <p className="truncate text-[10px] font-black uppercase tracking-[0.22em]">
-              {listing.formattedAddress?.split(",")[0] || (listing as any).location || "Campus area"}
+              {isHousing && housingListing.distanceLabel
+                ? housingListing.distanceLabel
+                : listing.formattedAddress?.split(",")[0] || (listing as any).location || "Campus area"}
             </p>
           </div>
         </div>
@@ -360,7 +376,7 @@ function ListingCard({ listing, type, onContact }: ListingCardProps) {
         <button
           type="button"
           onClick={() => onContact(listing.postedBy, listing.id, listing.title, type)}
-          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white text-black py-5 text-[10px] font-black uppercase tracking-[0.28em] shadow-pro transition-all hover:bg-kjc-accent hover:text-white active:scale-[0.98]"
+          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-pro transition-all hover:bg-kjc-accent hover:text-white active:scale-[0.98]"
         >
           Ping owner
           <Send size={16} />
@@ -375,12 +391,48 @@ function Chattery() {
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [userMap, setUserMap] = useState<Record<string, UserLite>>({});
+
   const { user } = useAuth();
 
   useEffect(() => {
     const unsubscribe = subscribeToConversations(setConversations);
     return unsubscribe;
   }, [user]);
+
+  useEffect(() => {
+    async function loadUsers() {
+      if (!user || conversations.length === 0) {
+        setUserMap({});
+        return;
+      }
+
+      const otherUserIds = conversations
+        .map((conversation) => conversation.participants.find((id) => id !== user.uid))
+        .filter(Boolean) as string[];
+
+      const uniqueIds = [...new Set(otherUserIds)];
+
+      const entries = await Promise.all(
+        uniqueIds.map(async (uid) => {
+          const snapshot = await getDoc(doc(db, "users", uid));
+          const data = snapshot.data();
+
+          return [
+            uid,
+            {
+              displayName: data?.displayName || "CampusX user",
+              photoURL: data?.photoURL || "",
+            },
+          ] as const;
+        })
+      );
+
+      setUserMap(Object.fromEntries(entries));
+    }
+
+    loadUsers();
+  }, [conversations, user]);
 
   useEffect(() => {
     if (!selectedChat) {
@@ -392,6 +444,15 @@ function Chattery() {
     return unsubscribe;
   }, [selectedChat]);
 
+  const getOtherUser = (conversation: Conversation) => {
+    const otherUserId = conversation.participants.find((id) => id !== user?.uid);
+    return otherUserId ? userMap[otherUserId] : null;
+  };
+
+  const getOtherUserName = (conversation: Conversation) => {
+    return getOtherUser(conversation)?.displayName || "CampusX user";
+  };
+
   const handleSend = async () => {
     if (!input.trim() || !selectedChat) return;
 
@@ -400,6 +461,9 @@ function Chattery() {
   };
 
   if (selectedChat) {
+    const otherUser = getOtherUser(selectedChat);
+    const otherUserName = getOtherUserName(selectedChat);
+
     return (
       <div className="fixed inset-0 z-[120] flex flex-col bg-black">
         <header className="sticky top-0 flex items-center justify-between border-b border-white/10 bg-black/95 p-6">
@@ -413,13 +477,23 @@ function Chattery() {
               <ArrowLeft size={24} />
             </button>
 
-            <div>
-              <h3 className="text-xl pro-heading leading-none tracking-tighter">
-                {selectedChat.listingTitle}
-              </h3>
-              <p className="mt-2 text-[9px] font-black uppercase tracking-[0.25em] text-white/35">
-                Regarding this listing
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                {otherUser?.photoURL ? (
+                  <img src={otherUser.photoURL} alt={otherUserName} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-kjc-accent/20 text-sm font-black text-kjc-accent">
+                    {otherUserName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-xl pro-heading leading-none tracking-tighter">{otherUserName}</h3>
+                <p className="mt-2 text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
+                  Regarding: {selectedChat.listingTitle}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -523,62 +597,82 @@ function Chattery() {
         </div>
       ) : (
         <div className="grid gap-5">
-          {conversations.map((conversation) => (
-            <motion.button
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              key={conversation.id}
-              type="button"
-              onClick={() => setSelectedChat(conversation)}
-              className="group flex w-full items-center gap-6 rounded-[40px] border border-white/5 bg-white/5 p-7 text-left transition-all hover:border-white/10 hover:bg-white/[0.08] active:scale-95"
-            >
-              <div className="relative">
-                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-white/5 text-white/45 shadow-inner transition-all duration-300 group-hover:bg-kjc-accent group-hover:text-white">
-                  {conversation.listingType === "housing" ? <Home size={28} /> : <ShoppingBag size={28} />}
+          {conversations.map((conversation) => {
+            const otherUser = getOtherUser(conversation);
+            const otherUserName = getOtherUserName(conversation);
+
+            return (
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={conversation.id}
+                type="button"
+                onClick={() => setSelectedChat(conversation)}
+                className="group flex w-full items-center gap-6 rounded-[40px] border border-white/5 bg-white/5 p-7 text-left transition-all hover:border-white/10 hover:bg-white/[0.08] active:scale-95"
+              >
+                <div className="relative">
+                  <div className="h-16 w-16 overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-inner">
+                    {otherUser?.photoURL ? (
+                      <img
+                        src={otherUser.photoURL}
+                        alt={otherUserName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-xl font-black text-kjc-accent">
+                        {otherUserName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+
+                  {(conversation.unreadCount ?? 0) > 0 && (
+                    <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-black bg-kjc-accent text-[10px] font-black text-white shadow-lg">
+                      {conversation.unreadCount ?? 0}
+                    </div>
+                  )}
                 </div>
 
-                {(conversation.unreadCount ?? 0) > 0 && (
-                  <div className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-black bg-kjc-accent text-[10px] font-black text-white shadow-lg">
-                    {conversation.unreadCount ?? 0}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-4">
+                    <h4 className="truncate text-xl pro-heading tracking-tight">{otherUserName}</h4>
+                    <p className="whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                      Active
+                    </p>
                   </div>
-                )}
-              </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-4">
-                  <h4 className="truncate text-xl pro-heading tracking-tight">
-                    {conversation.listingTitle}
-                  </h4>
-                  <p className="whitespace-nowrap rounded-full bg-emerald-500/10 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                    Active
+                  <p className="mt-1 line-clamp-1 text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
+                    Regarding: {conversation.listingTitle}
+                  </p>
+
+                  <p className="mt-1 line-clamp-1 text-[11px] font-bold text-white/45">
+                    {conversation.lastMessage || "Start chatting..."}
                   </p>
                 </div>
 
-                <p className="mt-1 line-clamp-1 text-[11px] font-bold uppercase tracking-wider text-white/40">
-                  {conversation.lastMessage || "Start chatting..."}
-                </p>
-              </div>
-
-              <ChevronRight
-                size={20}
-                className="text-white/10 transition-all group-hover:translate-x-1 group-hover:text-white"
-              />
-            </motion.button>
-          ))}
+                <ChevronRight
+                  size={20}
+                  className="text-white/10 transition-all group-hover:translate-x-1 group-hover:text-white"
+                />
+              </motion.button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-interface RoomsPageProps {
+function RoomsPage({
+  listings,
+  loading,
+  onContact,
+  showFilters,
+}: {
   listings: HousingListing[];
   loading: boolean;
-  onContact: ListingCardProps["onContact"];
+  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   showFilters: boolean;
-}
-
-function RoomsPage({ listings, loading, onContact, showFilters }: RoomsPageProps) {
+}) {
   const [category, setCategory] = useState("All");
   const [priceMax, setPriceMax] = useState<number>(50000);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
@@ -604,7 +698,7 @@ function RoomsPage({ listings, loading, onContact, showFilters }: RoomsPageProps
     <div className="space-y-8">
       <div className="mb-2 flex flex-col gap-1">
         <h2 className="flex items-center gap-3 text-4xl pro-heading tracking-tighter">
-          Housing <span className="text-kjc-accent italic">near KJC</span>
+          Housing <span className="text-kjc-accent italic">near KJU</span>
           <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
         </h2>
         <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/40">
@@ -613,7 +707,7 @@ function RoomsPage({ listings, loading, onContact, showFilters }: RoomsPageProps
       </div>
 
       <div className="flex gap-3 overflow-x-auto py-1 pb-3 scrollbar-hide">
-        {["All", "single", "shared", "1BHK", "PG"].map((filter) => (
+        {["All", "single", "shared", "1BHK", "2BHK", "PG"].map((filter) => (
           <button
             key={filter}
             type="button"
@@ -735,14 +829,17 @@ function RoomsPage({ listings, loading, onContact, showFilters }: RoomsPageProps
   );
 }
 
-interface MarketPageProps {
+function MarketPage({
+  items,
+  loading,
+  onContact,
+  showFilters,
+}: {
   items: MarketListing[];
   loading: boolean;
-  onContact: ListingCardProps["onContact"];
+  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   showFilters: boolean;
-}
-
-function MarketPage({ items, loading, onContact, showFilters }: MarketPageProps) {
+}) {
   const [category, setCategory] = useState("All");
   const [priceMax, setPriceMax] = useState<number>(20000);
   const [condition, setCondition] = useState("All");
@@ -878,13 +975,15 @@ function MarketPage({ items, loading, onContact, showFilters }: MarketPageProps)
   );
 }
 
-interface CreateModalProps {
+function CreateModal({
+  isOpen,
+  onClose,
+  onRefresh,
+}: {
   isOpen: boolean;
   onClose: () => void;
   onRefresh: () => void;
-}
-
-function CreateModal({ isOpen, onClose, onRefresh }: CreateModalProps) {
+}) {
   const [selectedType, setSelectedType] = useState<ListingType | null>(null);
 
   return (
@@ -1169,7 +1268,7 @@ export default function Shell() {
                             {profile?.photoURL ? (
                               <img
                                 src={profile.photoURL}
-                                alt={profile.displayName}
+                                alt={profile.displayName || "CampusX user"}
                                 className="h-full w-full object-cover"
                               />
                             ) : (
