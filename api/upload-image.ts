@@ -13,28 +13,26 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 function getFirebaseAdmin() {
   if (admin.apps.length) return admin.app();
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-  if (!projectId || !clientEmail || !privateKey) {
-    throw new Error("Missing Firebase Admin environment variables");
+  if (!encoded) {
+    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
   }
 
+  const serviceAccount = JSON.parse(
+    Buffer.from(encoded, "base64").toString("utf8")
+  );
+
   return admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
+    credential: admin.credential.cert(serviceAccount),
   });
 }
 
 function getSupabaseAdmin() {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl) throw new Error("Missing SUPABASE_URL");
+  if (!supabaseUrl) throw new Error("Missing SUPABASE_URL or VITE_SUPABASE_URL");
   if (!serviceRoleKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
   return createClient(supabaseUrl, serviceRoleKey, {
@@ -98,9 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Image must be under 5MB." });
     }
 
-    const outputBuffer = await sharp(inputBuffer, {
-      failOn: "none",
-    })
+    const outputBuffer = await sharp(inputBuffer, { failOn: "none" })
       .rotate()
       .resize({
         width: MAX_DIMENSION,
