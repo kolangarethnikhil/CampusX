@@ -16,12 +16,7 @@ export async function uploadMultipleImages(
     throw new Error("You must be signed in to upload images.");
   }
 
-  const tokenResult = await user.getIdTokenResult(true);
-
-  console.log("Firebase UID:", user.uid);
-  console.log("Firebase claims:", tokenResult.claims);
-
-  return Promise.all(files.map((file) => uploadImage(file, user.uid, folder)));
+  return Promise.all(files.map((file) => uploadImage(file, folder)));
 }
 
 export async function uploadProfilePhoto(
@@ -38,46 +33,65 @@ export async function uploadProfilePhoto(
     throw new Error("You can only upload your own profile photo.");
   }
 
-  const tokenResult = await user.getIdTokenResult(true);
-
-  console.log("Firebase UID:", user.uid);
-  console.log("Firebase claims:", tokenResult.claims);
-
-  return uploadImage(file, user.uid, "profiles");
+  return uploadImage(file, "profiles");
 }
 
-async function uploadImage(
-  file: File,
-  userId: string,
-  folder: ImageFolder
-): Promise<string> {
+async function uploadImage(file: File, folder: ImageFolder): Promise<string> {
   validateImage(file);
 
-  const extension = getFileExtension(file);
-  const fileName = `${crypto.randomUUID()}.${extension}`;
-  const path = `${userId}/${folder}/${fileName}`;
+  const user = auth.currentUser;
 
-  console.log("Uploading image to Supabase:", {
+  if (!user) {
+    throw new Error("You must be signed in to upload images.");
+  }
+
+  const firebaseToken = await user.getIdToken(true);
+
+  const signedUrlResponse = await fetch("/api/create-signed-upload-url", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${firebaseToken}`,
+    },
+    body: JSON.stringify({
+      folder,
+      contentType: file.type,
+    }),
+  });
+
+  const signedUrlPayload = await signedUrlResponse.json();
+
+  if (!signedUrlResponse.ok) {
+    throw new Error(
+      signedUrlPayload?.error || "Could not create signed upload URL."
+    );
+  }
+
+  const { path, token, publicUrl } = signedUrlPayload as {
+    path: string;
+    token: string;
+    publicUrl: string;
+  };
+
+  console.log("Uploading with signed URL:", {
     bucket: BUCKET,
     path,
     type: file.type,
     size: file.size,
   });
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    cacheControl: "31536000",
-    upsert: false,
-    contentType: file.type,
-  });
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .uploadToSignedUrl(path, token, file, {
+      contentType: file.type,
+    });
 
   if (error) {
-    console.error("Supabase upload error:", error);
+    console.error("Supabase signed upload error:", error);
     throw new Error(`Storage upload failed: ${error.message}`);
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-
-  return data.publicUrl;
+  return publicUrl;
 }
 
 function validateImage(file: File) {
@@ -90,12 +104,4 @@ function validateImage(file: File) {
   if (file.size > MAX_IMAGE_SIZE) {
     throw new Error("Image must be under 5MB.");
   }
-}
-
-function getFileExtension(file: File): string {
-  if (file.type === "image/jpeg") return "jpg";
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-
-  throw new Error("Unsupported image type.");
 }
