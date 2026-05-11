@@ -69,17 +69,23 @@ export async function getMyHousingListings(userId: string) {
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
-      where("postedBy", "==", userId),
-      orderBy("createdAt", "desc")
+      where("postedBy", "==", userId)
     );
 
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    })) as HousingListing[];
+    return snapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
+      .sort((a: any, b: any) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      }) as HousingListing[];
   } catch (error) {
+    console.error("getMyHousingListings failed:", error);
     handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
     return [];
   }

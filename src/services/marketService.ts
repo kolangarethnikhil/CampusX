@@ -57,17 +57,23 @@ export async function getMyMarketListings(userId: string) {
   try {
     const q = query(
       collection(db, COLLECTION_NAME),
-      where("postedBy", "==", userId),
-      orderBy("createdAt", "desc")
+      where("postedBy", "==", userId)
     );
 
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    })) as MarketListing[];
+    return snapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
+      .sort((a: any, b: any) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      }) as MarketListing[];
   } catch (error) {
+    console.error("getMyMarketListings failed:", error);
     handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
     return [];
   }
