@@ -18,8 +18,23 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
-import { getHousingListings, HousingListing } from "../../services/housingService";
-import { getMarketListings, MarketListing } from "../../services/marketService";
+import {
+  closeHousingListing,
+  deleteHousingListing,
+  getHousingListings,
+  getMyHousingListings,
+  HousingListing,
+  reopenHousingListing,
+} from "../../services/housingService";
+import {
+  closeMarketListing,
+  deleteMarketListing,
+  getMarketListings,
+  getMyMarketListings,
+  markMarketListingSold,
+  MarketListing,
+  reopenMarketListing,
+} from "../../services/marketService";
 import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
 import {
   Conversation,
@@ -77,7 +92,7 @@ function BottomNav({
             if (tab.id === "add") onAddClick();
             else onTabChange(tab.id as Tab);
           }}
-          className={`relative flex items-center justify-center transition-all duration-300 active:scale-90 ${
+          className={`relative flex items-center justify-center transition-transform duration-150 ease-out active:scale-[0.97] ${
             tab.special
               ? "h-16 w-16 -mt-5 scale-110 rounded-full bg-kjc-accent text-white shadow-lg shadow-kjc-accent/30"
               : `h-14 w-14 rounded-full ${
@@ -142,7 +157,7 @@ function Header({
               <button
                 type="button"
                 onClick={() => setIsSearching(true)}
-                className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white transition-all hover:bg-white/10 active:scale-90"
+                className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white transition-transform duration-150 ease-out hover:bg-white/10 active:scale-[0.97]"
                 aria-label="Search"
               >
                 <Search size={22} />
@@ -152,7 +167,7 @@ function Header({
                 <button
                   type="button"
                   onClick={onFilterClick}
-                  className={`rounded-2xl border p-3 transition-all active:scale-90 ${
+                  className={`rounded-2xl border p-3 transition-transform duration-150 ease-out active:scale-[0.97] ${
                     showFilters
                       ? "border-kjc-accent bg-kjc-accent text-white"
                       : "border-white/5 bg-white/5 text-white hover:bg-white/10"
@@ -191,7 +206,7 @@ function Header({
                 setSearchVal("");
                 onSearch("");
               }}
-              className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white active:scale-90"
+              className="rounded-2xl border border-white/5 bg-white/5 p-3 text-white transition-transform duration-150 ease-out active:scale-[0.97]"
               aria-label="Close search"
             >
               <X size={24} />
@@ -219,6 +234,7 @@ function ListingCard({
   const { user, signIn } = useAuth();
 
   const isHousing = type === "housing";
+  const isOwner = listing.postedBy === user?.uid;
   const housingListing = listing as HousingListing;
   const marketListing = listing as MarketListing;
   const price = isHousing ? housingListing.rent : marketListing.price;
@@ -272,21 +288,21 @@ function ListingCard({
     : listing.formattedAddress?.split(",")[0] || "Near KJU";
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpenDetails(listing, type)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onOpenDetails(listing, type);
+      }}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.985 }}
-      className="group mb-8 w-full overflow-hidden rounded-[40px] border border-white/10 bg-white/[0.04] text-left shadow-pro transition-all duration-300 hover:border-white/15"
+      className="group mb-8 w-full cursor-pointer overflow-hidden rounded-[40px] border border-white/10 bg-white/[0.04] text-left shadow-pro transition-colors duration-200 hover:border-white/15"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
         {listing.photos?.[0] ? (
-          <img
-            src={listing.photos[0]}
-            alt={listing.title}
-            className="h-full w-full object-cover"
-          />
+          <img src={listing.photos[0]} alt={listing.title} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-white/[0.025] text-white/10">
             {isHousing ? <Home size={64} strokeWidth={1} /> : <ShoppingBag size={64} strokeWidth={1} />}
@@ -296,22 +312,32 @@ function ListingCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
         <div className="absolute left-5 right-5 top-5 flex items-start justify-between">
-          <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white shadow-xl">
-            {isHousing ? housingListing.roomType || "Room" : marketListing.category || "Item"}
-          </span>
+          <div className="flex flex-col gap-2">
+            <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white shadow-xl">
+              {isHousing ? housingListing.roomType || "Room" : marketListing.category || "Item"}
+            </span>
 
-          <button
-            type="button"
-            onClick={handleToggleSave}
-            className={`flex h-12 w-12 items-center justify-center rounded-3xl border transition-all ${
-              isSaved
-                ? "scale-105 border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20"
-                : "border-white/20 bg-black/30 text-white hover:bg-white/15"
-            }`}
-            aria-label={isSaved ? "Unsave listing" : "Save listing"}
-          >
-            <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
-          </button>
+            {isOwner && (
+              <span className="rounded-full border border-white/10 bg-black/50 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white/70">
+                Your post
+              </span>
+            )}
+          </div>
+
+          {!isOwner && (
+            <button
+              type="button"
+              onClick={handleToggleSave}
+              className={`flex h-12 w-12 items-center justify-center rounded-3xl border transition-transform duration-150 ease-out active:scale-[0.97] ${
+                isSaved
+                  ? "scale-105 border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20"
+                  : "border-white/20 bg-black/30 text-white hover:bg-white/15"
+              }`}
+              aria-label={isSaved ? "Unsave listing" : "Save listing"}
+            >
+              <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
+            </button>
+          )}
         </div>
 
         <div className="absolute bottom-6 left-6 right-6">
@@ -348,41 +374,34 @@ function ListingCard({
             {isHousing ? housingListing.furnishing || "Unfurnished" : marketListing.condition || "Good"}
           </span>
 
-          {isHousing &&
-            housingListing.amenities?.slice(0, 2).map((amenity) => (
-              <span
-                key={amenity}
-                className="rounded-xl border border-white/5 bg-white/[0.035] px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white/60"
-              >
-                {amenity}
-              </span>
-            ))}
+          <span
+            className={`rounded-xl border px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] ${
+              listing.status === "available"
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                : "border-rose-500/20 bg-rose-500/10 text-rose-400"
+            }`}
+          >
+            {listing.status}
+          </span>
         </div>
-
-        {isHousing && housingListing.preferTenants && (
-          <div className="rounded-3xl border border-white/5 bg-white/[0.025] p-4">
-            <p className="mb-2 text-[10px] font-black uppercase leading-none tracking-[0.2em] text-white/40">
-              Preferred tenant
-            </p>
-            <p className="text-[11px] font-bold tracking-tight text-kjc-accent/85">
-              {housingListing.preferTenants}
-            </p>
-          </div>
-        )}
 
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
+            if (isOwner) {
+              onOpenDetails(listing, type);
+              return;
+            }
             onContact(listing.postedBy, listing.id, listing.title, type);
           }}
-          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-pro transition-all hover:bg-kjc-accent hover:text-white active:scale-[0.98]"
+          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-pro transition-transform duration-150 ease-out hover:bg-kjc-accent hover:text-white active:scale-[0.97]"
         >
-          Ping owner
+          {isOwner ? "Manage post" : "Ping owner"}
           <Send size={16} />
         </button>
       </div>
-    </motion.button>
+    </motion.div>
   );
 }
 
@@ -417,7 +436,7 @@ function RoomsPage({
         <button
           type="button"
           onClick={() => setViewMode("list")}
-          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] ${
+          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-transform duration-150 ease-out active:scale-[0.97] ${
             viewMode === "list" ? "bg-white text-black" : "text-white/40"
           }`}
         >
@@ -427,7 +446,7 @@ function RoomsPage({
         <button
           type="button"
           onClick={() => setViewMode("map")}
-          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] ${
+          className={`rounded-[20px] py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-transform duration-150 ease-out active:scale-[0.97] ${
             viewMode === "map" ? "bg-white text-black" : "text-white/40"
           }`}
         >
@@ -525,6 +544,65 @@ function MarketPage({
   );
 }
 
+function MyPostsPage({
+  housing,
+  market,
+  loading,
+  onContact,
+  onOpenDetails,
+}: {
+  housing: HousingListing[];
+  market: MarketListing[];
+  loading: boolean;
+  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
+  onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+}) {
+  const total = housing.length + market.length;
+
+  return (
+    <div className="space-y-7">
+      <div>
+        <h3 className="text-3xl pro-heading tracking-tighter">My posts</h3>
+        <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+          Manage your rooms and marketplace listings
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5" />
+      ) : total === 0 ? (
+        <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-20 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
+            You have not posted anything yet
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-6">
+          {housing.map((listing) => (
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              type="housing"
+              onContact={onContact}
+              onOpenDetails={onOpenDetails}
+            />
+          ))}
+
+          {market.map((listing) => (
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              type="market"
+              onContact={onContact}
+              onOpenDetails={onOpenDetails}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CreateModal({
   isOpen,
   onClose,
@@ -535,6 +613,10 @@ function CreateModal({
   onRefresh: () => void;
 }) {
   const [selectedType, setSelectedType] = useState<ListingType | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) setSelectedType(null);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -562,7 +644,7 @@ function CreateModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/40"
+                className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/40 transition-transform duration-150 ease-out active:scale-[0.97]"
               >
                 <X size={28} />
               </button>
@@ -572,7 +654,7 @@ function CreateModal({
               <button
                 type="button"
                 onClick={() => setSelectedType("housing")}
-                className="rounded-[36px] border border-white/5 bg-white/5 p-8 text-left"
+                className="rounded-[36px] border border-white/5 bg-white/5 p-8 text-left transition-transform duration-150 ease-out active:scale-[0.97]"
               >
                 <Home size={28} />
                 <h3 className="mt-6 text-xl pro-heading">Room</h3>
@@ -581,7 +663,7 @@ function CreateModal({
               <button
                 type="button"
                 onClick={() => setSelectedType("market")}
-                className="rounded-[36px] border border-white/5 bg-white/5 p-8 text-left"
+                className="rounded-[36px] border border-white/5 bg-white/5 p-8 text-left transition-transform duration-150 ease-out active:scale-[0.97]"
               >
                 <ShoppingBag size={28} />
                 <h3 className="mt-6 text-xl pro-heading">Item</h3>
@@ -672,7 +754,7 @@ function Chattery({
           <button
             type="button"
             onClick={() => setSelectedChat(null)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
           >
             <ArrowLeft size={22} />
           </button>
@@ -680,7 +762,7 @@ function Chattery({
           <button
             type="button"
             onClick={() => otherUserId && onOpenUserProfile(otherUserId)}
-            className="flex items-center gap-3 text-left"
+            className="flex items-center gap-3 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
           >
             <div className="h-11 w-11 overflow-hidden rounded-2xl bg-white/5">
               {otherUser?.photoURL ? (
@@ -732,7 +814,7 @@ function Chattery({
           <button
             type="button"
             onClick={handleSend}
-            className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-kjc-accent"
+            className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
           >
             <Send size={24} />
           </button>
@@ -765,7 +847,7 @@ function Chattery({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") setSelectedChat(conversation);
                 }}
-                className="flex w-full cursor-pointer items-center gap-5 rounded-[40px] border border-white/5 bg-white/5 p-6 text-left"
+                className="flex w-full cursor-pointer items-center gap-5 rounded-[40px] border border-white/5 bg-white/5 p-6 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
               >
                 <button
                   type="button"
@@ -773,7 +855,7 @@ function Chattery({
                     event.stopPropagation();
                     if (otherUserId) onOpenUserProfile(otherUserId);
                   }}
-                  className="h-14 w-14 overflow-hidden rounded-2xl bg-white/5"
+                  className="h-14 w-14 overflow-hidden rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
                 >
                   {otherUser?.photoURL ? (
                     <img src={otherUser.photoURL} alt={name} className="h-full w-full object-cover" />
@@ -808,6 +890,8 @@ export default function Shell() {
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
   const [marketData, setMarketData] = useState<MarketListing[]>([]);
+  const [myHousingData, setMyHousingData] = useState<HousingListing[]>([]);
+  const [myMarketData, setMyMarketData] = useState<MarketListing[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -818,11 +902,14 @@ export default function Shell() {
   const [selectedUserProfile, setSelectedUserProfile] = useState<UserLite | null>(null);
   const [isUserPreviewOpen, setIsUserPreviewOpen] = useState(false);
 
+  const [editingListing, setEditingListing] = useState<HousingListing | MarketListing | null>(null);
+  const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
+
   const { user, profile, signIn, logout } = useAuth();
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, user?.uid]);
 
   const loadData = async () => {
     setLoading(true);
@@ -831,6 +918,19 @@ export default function Shell() {
       const [housing, market] = await Promise.all([getHousingListings(), getMarketListings()]);
       setHousingData(housing);
       setMarketData(market);
+
+      if (user?.uid) {
+        const [myHousing, myMarket] = await Promise.all([
+          getMyHousingListings(user.uid),
+          getMyMarketListings(user.uid),
+        ]);
+
+        setMyHousingData(myHousing);
+        setMyMarketData(myMarket);
+      } else {
+        setMyHousingData([]);
+        setMyMarketData([]);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -852,9 +952,112 @@ export default function Shell() {
     setSelectedPoster((snapshot.data() as UserLite) || null);
   };
 
+  const closeListingDetail = () => {
+    setSelectedListing(null);
+    setSelectedPoster(null);
+  };
+
+  const handleEditListing = (listing: HousingListing | MarketListing, type: ListingType) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only edit your own post.");
+      return;
+    }
+
+    closeListingDetail();
+    setEditingListing(listing);
+    setEditingListingType(type);
+  };
+
+  const handleDeleteListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only delete your own post.");
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this post permanently? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      if (type === "housing") {
+        await deleteHousingListing(listing.id);
+      } else {
+        await deleteMarketListing(listing.id);
+      }
+
+      closeListingDetail();
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not delete post");
+    }
+  };
+
+  const handleCloseListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only close your own post.");
+      return;
+    }
+
+    try {
+      if (type === "housing") {
+        await closeHousingListing(listing.id);
+      } else {
+        await closeMarketListing(listing.id);
+      }
+
+      closeListingDetail();
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not close post");
+    }
+  };
+
+  const handleReopenListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only reopen your own post.");
+      return;
+    }
+
+    try {
+      if (type === "housing") {
+        await reopenHousingListing(listing.id);
+      } else {
+        await reopenMarketListing(listing.id);
+      }
+
+      closeListingDetail();
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not reopen post");
+    }
+  };
+
+  const handleMarkSold = async (listing: MarketListing) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only update your own post.");
+      return;
+    }
+
+    try {
+      await markMarketListingSold(listing.id);
+      closeListingDetail();
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not mark as sold");
+    }
+  };
+
   const handleContact = async (ownerId: string, listingId: string, title: string, type: string) => {
     if (!user) {
       await signIn();
+      return;
+    }
+
+    if (ownerId === user.uid) {
+      alert("This is your own post. Use Manage post to edit or close it.");
       return;
     }
 
@@ -915,50 +1118,68 @@ export default function Shell() {
               />
             )}
 
-            {activeTab === "inbox" && (
-              !user ? (
+            {activeTab === "inbox" &&
+              (!user ? (
                 <div className="py-24 text-center">
                   <button
                     type="button"
                     onClick={signIn}
-                    className="rounded-[30px] bg-white px-8 py-5 text-black"
+                    className="rounded-[30px] bg-white px-8 py-5 text-black transition-transform duration-150 ease-out active:scale-[0.97]"
                   >
                     Sign in to view inbox
                   </button>
                 </div>
               ) : (
                 <Chattery onOpenUserProfile={openUserProfile} />
-              )
-            )}
+              ))}
 
-            {activeTab === "me" && (
-              <div className="space-y-8">
-                <div className="rounded-[44px] border border-white/10 bg-white/5 p-9 text-center">
-                  <div className="mx-auto mb-6 h-28 w-28 overflow-hidden rounded-[40px] bg-white/5">
-                    {profile?.photoURL ? (
-                      <img src={profile.photoURL} alt="Profile" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-4xl font-black text-kjc-accent">
-                        {profile?.displayName?.charAt(0) || "X"}
-                      </div>
-                    )}
+            {activeTab === "me" &&
+              (!user ? (
+                <div className="py-24 text-center">
+                  <button
+                    type="button"
+                    onClick={signIn}
+                    className="rounded-[30px] bg-white px-8 py-5 text-black transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Sign in to view profile
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-10">
+                  <div className="rounded-[44px] border border-white/10 bg-white/5 p-9 text-center">
+                    <div className="mx-auto mb-6 h-28 w-28 overflow-hidden rounded-[40px] bg-white/5">
+                      {profile?.photoURL ? (
+                        <img src={profile.photoURL} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-4xl font-black text-kjc-accent">
+                          {profile?.displayName?.charAt(0) || "X"}
+                        </div>
+                      )}
+                    </div>
+
+                    <h2 className="text-4xl pro-heading">{profile?.displayName || "CampusX User"}</h2>
+                    <p className="mt-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">
+                      {profile?.campusRole || "Student"}
+                    </p>
                   </div>
 
-                  <h2 className="text-4xl pro-heading">{profile?.displayName || "CampusX User"}</h2>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">
-                    {profile?.campusRole || "Student"}
-                  </p>
-                </div>
+                  <MyPostsPage
+                    housing={myHousingData}
+                    market={myMarketData}
+                    loading={loading}
+                    onContact={handleContact}
+                    onOpenDetails={openListingDetails}
+                  />
 
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="w-full rounded-[36px] border border-rose-500/20 bg-rose-500/10 py-6 text-[10px] font-black uppercase tracking-[0.3em] text-rose-500"
-                >
-                  Log out
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full rounded-[36px] border border-rose-500/20 bg-rose-500/10 py-6 text-[10px] font-black uppercase tracking-[0.3em] text-rose-500 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Log out
+                  </button>
+                </div>
+              ))}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -977,19 +1198,34 @@ export default function Shell() {
 
       <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
 
+      {editingListing && (
+        <ListingForm
+          type={editingListingType}
+          existingListing={editingListing}
+          onClose={() => setEditingListing(null)}
+          onSuccess={async () => {
+            setEditingListing(null);
+            await loadData();
+          }}
+        />
+      )}
+
       <ListingDetailModal
         isOpen={Boolean(selectedListing)}
         listing={selectedListing}
         type={selectedListingType}
-        onClose={() => {
-          setSelectedListing(null);
-          setSelectedPoster(null);
-        }}
+        currentUserId={user?.uid || null}
+        onClose={closeListingDetail}
         onContact={handleContact}
         poster={selectedPoster}
         onOpenPoster={() => {
           if (selectedListing?.postedBy) openUserProfile(selectedListing.postedBy);
         }}
+        onEdit={handleEditListing}
+        onDelete={handleDeleteListing}
+        onCloseListing={handleCloseListing}
+        onReopenListing={handleReopenListing}
+        onMarkSold={handleMarkSold}
       />
 
       <UserProfilePreview

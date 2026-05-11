@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   Camera,
@@ -9,8 +9,16 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { createHousingListing } from "../../services/housingService";
-import { createMarketListing } from "../../services/marketService";
+import {
+  createHousingListing,
+  HousingListing,
+  updateHousingListing,
+} from "../../services/housingService";
+import {
+  createMarketListing,
+  MarketListing,
+  updateMarketListing,
+} from "../../services/marketService";
 import { uploadMultipleImages } from "../../services/storageService";
 import { useAuth } from "../../contexts/AuthContext";
 import { getDistanceFromKjuKm, getDistanceLabel } from "../../utils/location";
@@ -20,12 +28,13 @@ interface ListingFormProps {
   type: "housing" | "market";
   onClose: () => void;
   onSuccess: () => void;
+  existingListing?: HousingListing | MarketListing | null;
 }
 
 interface ListingFormData {
   title: string;
   roomType: "single" | "shared" | "1BHK" | "2BHK" | "PG";
-  category: "Furniture" | "Electronics" | "Books" | "Essentials";
+  category: "Furniture" | "Electronics" | "Books" | "Essentials" | "Other";
   rent: string;
   price: string;
   deposit: string;
@@ -70,23 +79,96 @@ const initialFormData: ListingFormData = {
   description: "",
 };
 
-export default function ListingForm({ type, onClose, onSuccess }: ListingFormProps) {
+export default function ListingForm({
+  type,
+  onClose,
+  onSuccess,
+  existingListing,
+}: ListingFormProps) {
   const { user } = useAuth();
+  const isEditing = Boolean(existingListing?.id);
+
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
   const [formData, setFormData] = useState<ListingFormData>(initialFormData);
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const updateField = <K extends keyof ListingFormData>(key: K, value: ListingFormData[K]) => {
+  const totalImageCount = existingPhotos.length + selectedImages.length;
+
+  const titleCopy = useMemo(() => {
+    if (isEditing) return type === "housing" ? "Edit room" : "Edit item";
+    return type === "housing" ? "Post room" : "List item";
+  }, [isEditing, type]);
+
+  useEffect(() => {
+    if (!existingListing) {
+      setFormData(initialFormData);
+      setExistingPhotos([]);
+      setSelectedImages([]);
+      setImagePreviews([]);
+      return;
+    }
+
+    if (type === "housing") {
+      const listing = existingListing as HousingListing;
+
+      setFormData({
+        ...initialFormData,
+        title: listing.title || "",
+        description: listing.description || "",
+        roomType: listing.roomType || "single",
+        rent: listing.rent ? String(listing.rent) : "",
+        deposit: listing.deposit ? String(listing.deposit) : "",
+        maintenance: listing.maintenance ? String(listing.maintenance) : "",
+        furnishing: listing.furnishing || "Unfurnished",
+        preferTenants: listing.preferTenants || "Any",
+        location: listing.location || "",
+        latitude: listing.latitude ?? null,
+        longitude: listing.longitude ?? null,
+        formattedAddress: listing.formattedAddress || listing.location || "",
+        googleMapsUrl: listing.googleMapsUrl || "",
+        distance: listing.distance || "",
+        distanceFromCollegeKm: listing.distanceFromCollegeKm || 0,
+        distanceLabel: listing.distanceLabel || listing.distance || "",
+      });
+    } else {
+      const listing = existingListing as MarketListing;
+
+      setFormData({
+        ...initialFormData,
+        title: listing.title || "",
+        description: listing.description || "",
+        category: listing.category || "Furniture",
+        price: listing.price ? String(listing.price) : "",
+        isNegotiable: Boolean(listing.isNegotiable),
+        reasonForSelling: listing.reasonForSelling || "",
+        condition: listing.condition || "Good",
+        latitude: listing.latitude ?? null,
+        longitude: listing.longitude ?? null,
+        formattedAddress: listing.formattedAddress || "",
+        location: listing.formattedAddress?.split(",")[0]?.trim() || "",
+      });
+    }
+
+    setExistingPhotos(existingListing.photos || []);
+    setSelectedImages([]);
+    setImagePreviews([]);
+  }, [existingListing, type]);
+
+  const updateField = <K extends keyof ListingFormData>(
+    key: K,
+    value: ListingFormData[K]
+  ) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
 
-    if (selectedImages.length + files.length > 5) {
+    if (totalImageCount + files.length > 5) {
       alert("Maximum 5 images allowed.");
       return;
     }
@@ -122,9 +204,13 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
     }
   };
 
-  const removeImage = (index: number) => {
+  const removeNewImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
     setImagePreviews((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const removeExistingPhoto = (index: number) => {
+    setExistingPhotos((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleLocationSelect = (loc: {
@@ -150,7 +236,7 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
   };
 
   const validateForm = () => {
-    if (!user) return "Please sign in before creating a listing.";
+    if (!user) return "Please sign in before saving a listing.";
     if (!formData.title.trim()) return "Please enter a title.";
     if (!formData.description.trim()) return "Please enter a description.";
 
@@ -186,21 +272,27 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
     setUploadStatus("");
 
     try {
-      let photoURLs: string[] = [];
+      let newPhotoURLs: string[] = [];
 
       if (selectedImages.length > 0) {
-        setUploadStatus(`Uploading ${selectedImages.length} image${selectedImages.length > 1 ? "s" : ""}...`);
+        setUploadStatus(
+          `Compressing and uploading ${selectedImages.length} image${
+            selectedImages.length > 1 ? "s" : ""
+          }...`
+        );
         const folder = type === "housing" ? "housing" : "marketplace";
-        photoURLs = await uploadMultipleImages(selectedImages, folder);
+        newPhotoURLs = await uploadMultipleImages(selectedImages, folder);
       }
 
-      setUploadStatus("Posting listing...");
+      const photos = [...existingPhotos, ...newPhotoURLs];
+
+      setUploadStatus(isEditing ? "Saving changes..." : "Posting listing...");
 
       if (type === "housing") {
         const rent = Number(formData.rent);
         const deposit = Number(formData.deposit) || rent * 2;
 
-        await createHousingListing({
+        const payload = {
           title: formData.title.trim(),
           description: formData.description.trim(),
           roomType: formData.roomType,
@@ -221,14 +313,22 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
           distanceLabel: formData.distanceLabel,
           distance: formData.distanceLabel || "Near KJU",
           availableFrom: "Immediately",
-          genderPreference: "none",
+          genderPreference: "none" as const,
           amenities: [],
-          photos: photoURLs,
-          postedBy: user.uid,
-          status: "available",
-        });
+          photos,
+          status: "available" as const,
+        };
+
+        if (isEditing && existingListing) {
+          await updateHousingListing(existingListing.id, payload);
+        } else {
+          await createHousingListing({
+            ...payload,
+            postedBy: user.uid,
+          });
+        }
       } else {
-        await createMarketListing({
+        const payload = {
           title: formData.title.trim(),
           description: formData.description.trim(),
           category: formData.category,
@@ -239,26 +339,37 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
           latitude: formData.latitude,
           longitude: formData.longitude,
           formattedAddress: formData.formattedAddress,
-          photos: photoURLs,
-          postedBy: user.uid,
-          status: "available",
-        });
+          photos,
+          status: "available" as const,
+        };
+
+        if (isEditing && existingListing) {
+          await updateMarketListing(existingListing.id, payload);
+        } else {
+          await createMarketListing({
+            ...payload,
+            postedBy: user.uid,
+          });
+        }
       }
 
-      setUploadStatus("Posted successfully");
+      setUploadStatus(isEditing ? "Changes saved" : "Posted successfully");
       onSuccess();
     } catch (error) {
-  console.error("Listing creation failed:", error);
+      console.error("Listing save failed:", error);
 
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : JSON.stringify(error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : JSON.stringify(error);
 
-  alert(message || "Failed to create listing.");
-}
+      alert(message || "Failed to save listing.");
+    } finally {
+      setLoading(false);
+      setUploadStatus("");
+    }
   };
 
   return (
@@ -275,15 +386,15 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
         <div className="sticky top-0 z-20 mb-8 flex items-center justify-between bg-black/90 pb-4">
           <div className="flex flex-col">
             <h2 className="text-4xl pro-heading tracking-tighter">
-              {type === "housing" ? "Post" : "List"}{" "}
+              {titleCopy.split(" ")[0]}{" "}
               <span className="text-kjc-accent italic">
-                {type === "housing" ? "room" : "item"}
+                {titleCopy.split(" ").slice(1).join(" ")}
               </span>
             </h2>
 
             <div className="mt-3 flex gap-2.5">
               <span className="rounded-full border border-white/5 bg-white/5 px-4 py-2 text-[8px] font-black uppercase tracking-[0.25em] text-white/40">
-                Exclusively KJU
+                {isEditing ? "Owner edit" : "Exclusively KJU"}
               </span>
 
               <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5">
@@ -298,7 +409,7 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
           <button
             type="button"
             onClick={onClose}
-            className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/25 transition-all hover:text-white active:scale-90"
+            className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97]"
           >
             <X size={24} />
           </button>
@@ -314,10 +425,12 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
 
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/80">
-                Listing trust
+                {isEditing ? "Update carefully" : "Listing trust"}
               </p>
               <p className="mt-1 text-[11px] font-bold uppercase leading-relaxed tracking-wider text-white/35">
-                Your post is linked to your verified CampusX profile.
+                {isEditing
+                  ? "Changes are visible immediately after saving."
+                  : "Your post is linked to your verified CampusX profile."}
               </p>
             </div>
           </div>
@@ -389,6 +502,7 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
                       <option value="Electronics">Electronics</option>
                       <option value="Books">Books</option>
                       <option value="Essentials">Essentials</option>
+                      <option value="Other">Other</option>
                     </>
                   )}
                 </select>
@@ -472,7 +586,12 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
             </label>
 
             <div className="rounded-[32px] border border-white/5 bg-white/[0.03] p-2">
-              <LocationSelector onLocationSelect={handleLocationSelect} />
+              <LocationSelector
+                onLocationSelect={handleLocationSelect}
+                initialAddress={formData.formattedAddress}
+                initialLat={formData.latitude ?? undefined}
+                initialLng={formData.longitude ?? undefined}
+              />
             </div>
 
             {formData.distanceLabel && (
@@ -495,22 +614,18 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
               multiple
               accept="image/*"
               onChange={handleImageSelect}
-              disabled={loading || selectedImages.length >= 5}
+              disabled={loading || totalImageCount >= 5}
               className="hidden"
             />
 
-            {imagePreviews.length === 0 ? (
+            {totalImageCount === 0 ? (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="group flex h-32 w-full flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-white/10 bg-white/5 text-white/25 transition-all duration-300 hover:border-kjc-accent/30 hover:bg-white/[0.08] hover:text-kjc-accent disabled:opacity-50"
+                className="group flex h-32 w-full flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-white/10 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:border-kjc-accent/30 hover:bg-white/[0.08] hover:text-kjc-accent active:scale-[0.98] disabled:opacity-50"
               >
-                <Camera
-                  size={40}
-                  strokeWidth={1}
-                  className="mb-2 transition-transform duration-300 group-hover:scale-110"
-                />
+                <Camera size={40} strokeWidth={1} className="mb-2" />
                 <span className="text-[9px] font-black uppercase tracking-[0.35em]">
                   Add photos
                 </span>
@@ -519,6 +634,28 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
             ) : (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
+                  {existingPhotos.map((photo, index) => (
+                    <div
+                      key={photo}
+                      className="group relative overflow-hidden rounded-[20px] border border-white/10 bg-white/5"
+                    >
+                      <img
+                        src={photo}
+                        alt={`Existing ${index + 1}`}
+                        className="h-32 w-full object-cover"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => removeExistingPhoto(index)}
+                        disabled={loading}
+                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} className="text-white" />
+                      </button>
+                    </div>
+                  ))}
+
                   {imagePreviews.map((preview, index) => (
                     <div
                       key={preview}
@@ -532,7 +669,7 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
 
                       <button
                         type="button"
-                        onClick={() => removeImage(index)}
+                        onClick={() => removeNewImage(index)}
                         disabled={loading}
                         className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
                       >
@@ -541,12 +678,12 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
                     </div>
                   ))}
 
-                  {selectedImages.length < 5 && (
+                  {totalImageCount < 5 && (
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={loading}
-                      className="flex h-32 items-center justify-center rounded-[20px] border-2 border-dashed border-white/10 bg-white/5 text-white/25 transition-all hover:border-kjc-accent/30 hover:bg-white/[0.08] hover:text-kjc-accent disabled:opacity-50"
+                      className="flex h-32 items-center justify-center rounded-[20px] border-2 border-dashed border-white/10 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:border-kjc-accent/30 hover:bg-white/[0.08] hover:text-kjc-accent active:scale-[0.98] disabled:opacity-50"
                     >
                       <Camera size={24} strokeWidth={1} />
                     </button>
@@ -554,7 +691,7 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
                 </div>
 
                 <div className="pl-4 text-[9px] text-white/40">
-                  {selectedImages.length} of 5 images selected
+                  {totalImageCount} of 5 images selected
                 </div>
               </div>
             )}
@@ -569,9 +706,9 @@ export default function ListingForm({ type, onClose, onSuccess }: ListingFormPro
           <button
             type="submit"
             disabled={loading}
-            className="mt-8 w-full rounded-[36px] bg-kjc-accent py-7 text-[10px] font-black uppercase tracking-[0.35em] text-white shadow-[0_20px_50px_rgba(139,92,246,0.2)] transition-all hover:bg-kjc-accent/90 active:scale-[0.98] disabled:opacity-40 disabled:grayscale"
+            className="mt-8 w-full rounded-[36px] bg-kjc-accent py-7 text-[10px] font-black uppercase tracking-[0.35em] text-white shadow-[0_20px_50px_rgba(139,92,246,0.2)] transition-transform duration-150 ease-out hover:bg-kjc-accent/90 active:scale-[0.98] disabled:opacity-40 disabled:grayscale"
           >
-            {loading ? "Posting..." : "Post Listing"}
+            {loading ? (isEditing ? "Saving..." : "Posting...") : isEditing ? "Save Changes" : "Post Listing"}
           </button>
         </form>
       </motion.div>
