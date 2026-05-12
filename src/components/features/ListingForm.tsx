@@ -21,7 +21,7 @@ import {
 } from "../../services/marketService";
 import { uploadMultipleImages } from "../../services/storageService";
 import { useAuth } from "../../contexts/AuthContext";
-import { getDistanceFromKjuKm, getDistanceLabel } from "../../utils/location";
+import { getVehicleRouteFromKju } from "../../utils/location";
 import LocationSelector from "./LocationSelector";
 
 interface ListingFormProps {
@@ -51,6 +51,9 @@ interface ListingFormData {
   distance: string;
   distanceFromCollegeKm: number;
   distanceLabel: string;
+  travelDistanceMeters: number;
+  travelDistanceLabel: string;
+  travelDurationLabel: string;
   condition: "New" | "Like New" | "Good" | "Fair";
   description: string;
 }
@@ -75,6 +78,9 @@ const initialFormData: ListingFormData = {
   distance: "",
   distanceFromCollegeKm: 0,
   distanceLabel: "",
+  travelDistanceMeters: 0,
+  travelDistanceLabel: "",
+  travelDurationLabel: "",
   condition: "Good",
   description: "",
 };
@@ -130,9 +136,20 @@ export default function ListingForm({
         longitude: listing.longitude ?? null,
         formattedAddress: listing.formattedAddress || listing.location || "",
         googleMapsUrl: listing.googleMapsUrl || "",
-        distance: listing.distance || "",
+        distance: listing.travelDistanceLabel || listing.distance || "",
         distanceFromCollegeKm: listing.distanceFromCollegeKm || 0,
-        distanceLabel: listing.distanceLabel || listing.distance || "",
+        distanceLabel:
+          listing.travelDistanceLabel ||
+          listing.distanceLabel ||
+          listing.distance ||
+          "",
+        travelDistanceMeters: listing.travelDistanceMeters || 0,
+        travelDistanceLabel:
+          listing.travelDistanceLabel ||
+          listing.distanceLabel ||
+          listing.distance ||
+          "",
+        travelDurationLabel: listing.travelDurationLabel || "",
       });
     } else {
       const listing = existingListing as MarketListing;
@@ -213,26 +230,42 @@ export default function ListingForm({
     setExistingPhotos((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const handleLocationSelect = (loc: {
+  const handleLocationSelect = async (loc: {
     address: string;
     lat: number;
     lng: number;
     googleMapsUrl?: string;
   }) => {
-    const distanceFromCollegeKm = getDistanceFromKjuKm(loc.lat, loc.lng);
-    const distanceLabel = getDistanceLabel(distanceFromCollegeKm);
+    setUploadStatus("Calculating KJU travel distance...");
 
-    setFormData((prev) => ({
-      ...prev,
-      formattedAddress: loc.address,
-      latitude: loc.lat,
-      longitude: loc.lng,
-      googleMapsUrl: loc.googleMapsUrl || prev.googleMapsUrl,
-      distanceFromCollegeKm,
-      distanceLabel,
-      distance: distanceLabel,
-      location: loc.address.split(",")[0]?.trim() || loc.address,
-    }));
+    try {
+      const route = await getVehicleRouteFromKju(loc.lat, loc.lng);
+
+      setFormData((prev) => ({
+        ...prev,
+        formattedAddress: loc.address,
+        latitude: loc.lat,
+        longitude: loc.lng,
+        googleMapsUrl: loc.googleMapsUrl || prev.googleMapsUrl,
+        distanceFromCollegeKm: route.travelDistanceMeters / 1000,
+        distanceLabel: route.travelDistanceLabel,
+        distance: route.travelDistanceLabel,
+        travelDistanceMeters: route.travelDistanceMeters,
+        travelDistanceLabel: route.travelDistanceLabel,
+        travelDurationLabel: route.travelDurationLabel,
+        location: loc.address.split(",")[0]?.trim() || loc.address,
+      }));
+    } catch (error) {
+      console.error("Travel distance failed:", error);
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Could not calculate travel distance from KJU."
+      );
+    } finally {
+      setUploadStatus("");
+    }
   };
 
   const validateForm = () => {
@@ -242,6 +275,10 @@ export default function ListingForm({
 
     if (formData.latitude === null || formData.longitude === null) {
       return "Please select or paste a valid location.";
+    }
+
+    if (type === "housing" && !formData.travelDistanceLabel) {
+      return "Please wait for KJU travel distance to calculate.";
     }
 
     if (type === "housing") {
@@ -280,6 +317,7 @@ export default function ListingForm({
             selectedImages.length > 1 ? "s" : ""
           }...`
         );
+
         const folder = type === "housing" ? "housing" : "marketplace";
         newPhotoURLs = await uploadMultipleImages(selectedImages, folder);
       }
@@ -310,8 +348,11 @@ export default function ListingForm({
           formattedAddress: formData.formattedAddress,
           googleMapsUrl: formData.googleMapsUrl,
           distanceFromCollegeKm: formData.distanceFromCollegeKm,
-          distanceLabel: formData.distanceLabel,
-          distance: formData.distanceLabel || "Near KJU",
+          distanceLabel: formData.travelDistanceLabel,
+          distance: formData.travelDistanceLabel || "Near KJU",
+          travelDistanceMeters: formData.travelDistanceMeters,
+          travelDistanceLabel: formData.travelDistanceLabel,
+          travelDurationLabel: formData.travelDurationLabel,
           availableFrom: "Immediately",
           genderPreference: "none" as const,
           amenities: [],
@@ -594,11 +635,17 @@ export default function ListingForm({
               />
             </div>
 
-            {formData.distanceLabel && (
+            {formData.travelDistanceLabel && (
               <div className="rounded-[24px] border border-kjc-accent/20 bg-kjc-accent/10 px-5 py-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-kjc-accent">
-                  {formData.distanceLabel}
+                  {formData.travelDistanceLabel}
                 </p>
+
+                {formData.travelDurationLabel && (
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">
+                    {formData.travelDurationLabel}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -629,7 +676,9 @@ export default function ListingForm({
                 <span className="text-[9px] font-black uppercase tracking-[0.35em]">
                   Add photos
                 </span>
-                <span className="mt-1 text-[8px] text-white/35">Max 5 images, 5MB each</span>
+                <span className="mt-1 text-[8px] text-white/35">
+                  Max 5 images, 5MB each
+                </span>
               </button>
             ) : (
               <div className="space-y-4">
@@ -708,7 +757,13 @@ export default function ListingForm({
             disabled={loading}
             className="mt-8 w-full rounded-[36px] bg-kjc-accent py-7 text-[10px] font-black uppercase tracking-[0.35em] text-white shadow-[0_20px_50px_rgba(139,92,246,0.2)] transition-transform duration-150 ease-out hover:bg-kjc-accent/90 active:scale-[0.98] disabled:opacity-40 disabled:grayscale"
           >
-            {loading ? (isEditing ? "Saving..." : "Posting...") : isEditing ? "Save Changes" : "Post Listing"}
+            {loading
+              ? isEditing
+                ? "Saving..."
+                : "Posting..."
+              : isEditing
+                ? "Save Changes"
+                : "Post Listing"}
           </button>
         </form>
       </motion.div>

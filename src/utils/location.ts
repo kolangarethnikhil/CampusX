@@ -5,6 +5,12 @@ export interface ParsedLocation {
   lng: number;
 }
 
+export interface VehicleRouteDistance {
+  travelDistanceMeters: number;
+  travelDistanceLabel: string;
+  travelDurationLabel: string;
+}
+
 export function parseGoogleMapsLocation(input: string): ParsedLocation | null {
   const value = input.trim();
 
@@ -33,6 +39,40 @@ export function parseGoogleMapsLocation(input: string): ParsedLocation | null {
   }
 
   return null;
+}
+
+export async function getVehicleRouteFromKju(
+  lat: number,
+  lng: number
+): Promise<VehicleRouteDistance> {
+  const response = await fetch("/api/route-distance", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ lat, lng }),
+  });
+
+  const rawResponse = await response.text();
+
+  let payload: VehicleRouteDistance & { error?: string };
+
+  try {
+    payload = JSON.parse(rawResponse);
+  } catch {
+    throw new Error(
+      `Route API did not return JSON. Status: ${response.status}. Response: ${rawResponse.slice(
+        0,
+        140
+      )}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Could not calculate travel distance.");
+  }
+
+  return payload;
 }
 
 export function getDistanceFromKjuKm(lat: number, lng: number): number {

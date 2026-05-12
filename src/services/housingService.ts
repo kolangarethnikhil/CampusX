@@ -33,8 +33,14 @@ export interface HousingListing {
   longitude?: number;
   formattedAddress?: string;
   googleMapsUrl?: string;
+
   distanceFromCollegeKm?: number;
   distanceLabel?: string;
+
+  travelDistanceMeters?: number;
+  travelDistanceLabel?: string;
+  travelDurationLabel?: string;
+
   description?: string;
   createdAt: any;
   updatedAt?: any;
