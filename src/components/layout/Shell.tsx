@@ -678,8 +678,14 @@ function CreateModal({
 
 function Chattery({
   onOpenUserProfile,
+  openConversationId,
+  onConversationOpened,
+  onOpenListing,
 }: {
   onOpenUserProfile: (uid: string) => void;
+  openConversationId?: string | null;
+  onConversationOpened?: () => void;
+  onOpenListing?: (conversation: Conversation) => void | Promise<void>;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
@@ -727,6 +733,22 @@ function Chattery({
   }, [conversations, user]);
 
   useEffect(() => {
+    if (!openConversationId) return;
+
+    const matchedConversation = conversations.find(
+      (conversation) => conversation.id === openConversationId
+    );
+
+    if (!matchedConversation) return;
+
+    if (selectedChat?.id !== matchedConversation.id) {
+      setSelectedChat(matchedConversation);
+    }
+
+    onConversationOpened?.();
+  }, [conversations, openConversationId, onConversationOpened, selectedChat?.id]);
+
+  useEffect(() => {
     if (!selectedChat) return;
 
     const unsubscribe = subscribeToMessages(selectedChat.id, setMessages);
@@ -747,6 +769,12 @@ function Chattery({
     const otherUserId = getOtherUserId(selectedChat);
     const otherUser = otherUserId ? userMap[otherUserId] : null;
     const name = otherUser?.displayName || "CampusX user";
+    const listingPrice =
+      typeof selectedChat.listingPrice === "number"
+        ? selectedChat.listingPrice.toLocaleString()
+        : "";
+    const listingContextLocation = selectedChat.listingLocation?.trim() || "";
+    const listingContextStatus = selectedChat.listingStatus?.trim() || "";
 
     return (
       <div className="fixed inset-0 z-[120] flex flex-col bg-black">
@@ -782,6 +810,49 @@ function Chattery({
             </div>
           </button>
         </header>
+
+        <div className="border-b border-white/10 px-5 py-4">
+          <button
+            type="button"
+            onClick={() => onOpenListing?.(selectedChat)}
+            className="flex w-full items-center gap-4 rounded-[26px] border border-white/5 bg-white/5 p-4 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+          >
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5">
+              {selectedChat.listingPhoto ? (
+                <img
+                  src={selectedChat.listingPhoto}
+                  alt={selectedChat.listingTitle}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] text-white/20">
+                  Post
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <h4 className="truncate text-sm font-semibold text-white">
+                  {selectedChat.listingTitle}
+                </h4>
+                {listingPrice && (
+                  <span className="shrink-0 text-sm font-black text-kjc-accent">
+                    ₹{listingPrice}
+                  </span>
+                )}
+              </div>
+
+              <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
+                {listingContextStatus || listingContextLocation || "Listing details"}
+              </p>
+
+              <p className="mt-1 text-[10px] font-black uppercase tracking-[0.16em] text-kjc-accent">
+                Tap to view original post
+              </p>
+            </div>
+          </button>
+        </div>
 
         <div className="flex-1 space-y-7 overflow-y-auto p-6">
           {messages.map((message) => {
@@ -899,6 +970,7 @@ export default function Shell() {
   const [selectedListing, setSelectedListing] = useState<HousingListing | MarketListing | null>(null);
   const [selectedListingType, setSelectedListingType] = useState<ListingType>("housing");
   const [selectedPoster, setSelectedPoster] = useState<UserLite | null>(null);
+  const [chatToOpenId, setChatToOpenId] = useState<string | null>(null);
   const [selectedUserProfile, setSelectedUserProfile] = useState<UserLite | null>(null);
   const [isUserPreviewOpen, setIsUserPreviewOpen] = useState(false);
 
@@ -950,6 +1022,37 @@ export default function Shell() {
 
     const snapshot = await getDoc(doc(db, "users", listing.postedBy));
     setSelectedPoster((snapshot.data() as UserLite) || null);
+  };
+
+  const openOriginalListingFromConversation = async (conversation: Conversation) => {
+    try {
+      const collectionName =
+        conversation.listingType === "housing"
+          ? "housing_listings"
+          : conversation.listingType === "market"
+            ? "marketplace_listings"
+            : null;
+
+      if (!collectionName) {
+        alert("Original post is no longer available.");
+        return;
+      }
+
+      const snapshot = await getDoc(doc(db, collectionName, conversation.listingId));
+
+      if (!snapshot.exists()) {
+        alert("Original post is no longer available.");
+        return;
+      }
+
+      await openListingDetails(
+        snapshot.data() as HousingListing | MarketListing,
+        conversation.listingType as ListingType
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Original post is no longer available.");
+    }
   };
 
   const closeListingDetail = () => {
@@ -1062,7 +1165,33 @@ export default function Shell() {
     }
 
     try {
-      await startConversation(ownerId, listingId, title, type);
+      const listing =
+        housingData.find((item) => item.id === listingId) ||
+        marketData.find((item) => item.id === listingId) ||
+        myHousingData.find((item) => item.id === listingId) ||
+        myMarketData.find((item) => item.id === listingId) ||
+        null;
+
+      const listingMetadata = listing
+        ? {
+            listingPhoto: listing.photos?.[0],
+            listingPrice: "rent" in listing ? listing.rent : listing.price,
+            listingStatus: listing.status,
+            listingLocation:
+              "rent" in listing
+                ? getHousingLocationDisplay(listing).compact
+                : listing.formattedAddress?.split(",")[0]?.trim() || "Near KJU",
+          }
+        : undefined;
+
+      const conversationId = await startConversation(
+        ownerId,
+        listingId,
+        title,
+        type,
+        listingMetadata
+      );
+      setChatToOpenId(conversationId);
       setSelectedListing(null);
       setActiveTab("inbox");
     } catch (error) {
@@ -1130,7 +1259,12 @@ export default function Shell() {
                   </button>
                 </div>
               ) : (
-                <Chattery onOpenUserProfile={openUserProfile} />
+                <Chattery
+                  onOpenUserProfile={openUserProfile}
+                  openConversationId={chatToOpenId}
+                  onConversationOpened={() => setChatToOpenId(null)}
+                  onOpenListing={openOriginalListingFromConversation}
+                />
               ))}
 
             {activeTab === "me" &&

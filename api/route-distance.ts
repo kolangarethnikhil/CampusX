@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { KJU_LOCATION } from "../src/constants/campus";
+
+const KJU_LOCATION = {
+  lat: 13.058229,
+  lng: 77.6424351,
+};
 
 type RouteDistanceResponse = {
   travelDistanceMeters: number;
@@ -91,7 +95,15 @@ export default async function handler(
       }
     );
 
-    const data = await response.json();
+    const rawResponse = await response.text();
+
+    let data: any;
+
+    try {
+      data = rawResponse ? JSON.parse(rawResponse) : {};
+    } catch {
+      data = { error: { message: rawResponse || "Could not calculate route distance" } };
+    }
 
     if (!response.ok) {
       return res.status(response.status).json({

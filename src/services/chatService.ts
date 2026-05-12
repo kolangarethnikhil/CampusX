@@ -18,6 +18,10 @@ export interface Conversation {
   listingId: string;
   listingTitle: string;
   listingType: string;
+  listingPhoto?: string;
+  listingPrice?: number;
+  listingStatus?: string;
+  listingLocation?: string;
   lastMessage?: string;
   updatedAt: any;
   unreadCount?: number;
@@ -34,7 +38,11 @@ export const startConversation = async (
   ownerId: string, 
   listingId: string, 
   listingTitle: string, 
-  listingType: string
+  listingType: string,
+  listingMetadata?: Pick<
+    Conversation,
+    "listingPhoto" | "listingPrice" | "listingStatus" | "listingLocation"
+  >
 ) => {
   if (!auth.currentUser) throw new Error('Must be signed in');
   if (auth.currentUser.uid === ownerId) throw new Error('Cannot start chat with yourself');
@@ -60,6 +68,7 @@ export const startConversation = async (
       listingId,
       listingTitle,
       listingType,
+      ...listingMetadata,
       updatedAt: serverTimestamp(),
       lastMessage: 'Chat started'
     });
