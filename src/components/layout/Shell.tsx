@@ -238,6 +238,7 @@ function ListingCard({
   const housingListing = listing as HousingListing;
   const marketListing = listing as MarketListing;
   const price = isHousing ? housingListing.rent : marketListing.price;
+  const photoCount = listing.photos?.length || 0;
 
   useEffect(() => {
     let active = true;
@@ -302,7 +303,13 @@ function ListingCard({
     >
       <div className="relative aspect-[16/10] overflow-hidden">
         {listing.photos?.[0] ? (
-          <img src={listing.photos[0]} alt={listing.title} className="h-full w-full object-cover" />
+          <img
+            src={listing.photos[0]}
+            alt={listing.title}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-white/[0.025] text-white/10">
             {isHousing ? <Home size={64} strokeWidth={1} /> : <ShoppingBag size={64} strokeWidth={1} />}
@@ -324,20 +331,28 @@ function ListingCard({
             )}
           </div>
 
-          {!isOwner && (
-            <button
-              type="button"
-              onClick={handleToggleSave}
-              className={`flex h-12 w-12 items-center justify-center rounded-3xl border transition-transform duration-150 ease-out active:scale-[0.97] ${
-                isSaved
-                  ? "scale-105 border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20"
-                  : "border-white/20 bg-black/30 text-white hover:bg-white/15"
-              }`}
-              aria-label={isSaved ? "Unsave listing" : "Save listing"}
-            >
-              <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
-            </button>
-          )}
+          <div className="flex flex-col items-end gap-2">
+            {photoCount > 1 && (
+              <span className="rounded-full border border-white/15 bg-black/55 px-3 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-white backdrop-blur-xl">
+                1/{photoCount}
+              </span>
+            )}
+
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={handleToggleSave}
+                className={`flex h-12 w-12 items-center justify-center rounded-3xl border transition-transform duration-150 ease-out active:scale-[0.97] ${
+                  isSaved
+                    ? "scale-105 border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20"
+                    : "border-white/20 bg-black/30 text-white hover:bg-white/15"
+                }`}
+                aria-label={isSaved ? "Unsave listing" : "Save listing"}
+              >
+                <Bookmark size={20} fill={isSaved ? "currentColor" : "none"} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-6 left-6 right-6">
@@ -1046,9 +1061,9 @@ export default function Shell() {
       }
 
       await openListingDetails(
-        snapshot.data() as HousingListing | MarketListing,
-        conversation.listingType as ListingType
-      );
+  { id: snapshot.id, ...snapshot.data() } as HousingListing | MarketListing,
+  conversation.listingType as ListingType
+);
     } catch (error) {
       console.error(error);
       alert("Original post is no longer available.");

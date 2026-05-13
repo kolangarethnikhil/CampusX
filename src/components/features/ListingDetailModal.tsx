@@ -1,4 +1,7 @@
+import { useEffect, useMemo, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   ExternalLink,
   Home,
@@ -55,6 +58,16 @@ export default function ListingDetailModal({
   onReopenListing,
   onMarkSold,
 }: ListingDetailModalProps) {
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  useEffect(() => {
+    setActivePhotoIndex(0);
+    setTouchStartX(null);
+  }, [listing?.id]);
+
+  const photos = useMemo(() => listing?.photos?.filter(Boolean) || [], [listing?.photos]);
+
   if (!isOpen || !listing) return null;
 
   const isHousing = type === "housing";
@@ -65,6 +78,8 @@ export default function ListingDetailModal({
   const price = isHousing ? housing.rent : market.price;
   const status = listing.status || "available";
   const isClosed = status === "closed" || status === "sold";
+  const hasMultiplePhotos = photos.length > 1;
+  const activePhoto = photos[activePhotoIndex];
 
   const location = isHousing
     ? getHousingLocationDisplay(housing)
@@ -82,6 +97,29 @@ export default function ListingDetailModal({
         : "";
 
   const posterName = poster?.displayName || "CampusX user";
+
+  const goToPreviousPhoto = () => {
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex((current) => (current === 0 ? photos.length - 1 : current - 1));
+  };
+
+  const goToNextPhoto = () => {
+    if (!hasMultiplePhotos) return;
+    setActivePhotoIndex((current) => (current === photos.length - 1 ? 0 : current + 1));
+  };
+
+  const handleTouchEnd = (clientX: number) => {
+    if (touchStartX === null || !hasMultiplePhotos) return;
+
+    const diff = touchStartX - clientX;
+
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) goToNextPhoto();
+      else goToPreviousPhoto();
+    }
+
+    setTouchStartX(null);
+  };
 
   return (
     <div className="fixed inset-0 z-[140] flex items-end justify-center p-4 sm:items-center">
@@ -114,12 +152,18 @@ export default function ListingDetailModal({
           </button>
         </div>
 
-        <div className="relative aspect-[16/10] bg-white/[0.03]">
-          {listing.photos?.[0] ? (
+        <div
+          className="relative aspect-[16/10] bg-white/[0.03]"
+          onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+          onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+        >
+          {activePhoto ? (
             <img
-              src={listing.photos[0]}
-              alt={listing.title}
+              src={activePhoto}
+              alt={`${listing.title} photo ${activePhotoIndex + 1}`}
               className="h-full w-full object-cover"
+              loading="eager"
+              decoding="async"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-white/10">
@@ -127,16 +171,87 @@ export default function ListingDetailModal({
             </div>
           )}
 
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
+
           <div className="absolute left-5 top-5 rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
             {isHousing ? housing.roomType : market.category}
           </div>
 
+          {photos.length > 0 && (
+            <div className="absolute right-5 top-5 rounded-full border border-white/15 bg-black/55 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
+              {activePhotoIndex + 1}/{photos.length}
+            </div>
+          )}
+
           {isClosed && (
-            <div className="absolute right-5 top-5 rounded-full border border-rose-500/20 bg-rose-500/90 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
+            <div className="absolute right-5 bottom-5 rounded-full border border-rose-500/20 bg-rose-500/90 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
               {status}
             </div>
           )}
+
+          {hasMultiplePhotos && (
+            <>
+              <button
+                type="button"
+                onClick={goToPreviousPhoto}
+                className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-xl transition-transform duration-150 ease-out active:scale-[0.97]"
+                aria-label="Previous photo"
+              >
+                <ChevronLeft size={22} />
+              </button>
+
+              <button
+                type="button"
+                onClick={goToNextPhoto}
+                className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white backdrop-blur-xl transition-transform duration-150 ease-out active:scale-[0.97]"
+                aria-label="Next photo"
+              >
+                <ChevronRight size={22} />
+              </button>
+            </>
+          )}
+
+          {hasMultiplePhotos && (
+            <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full border border-white/10 bg-black/50 px-3 py-2 backdrop-blur-xl">
+              {photos.map((photo, index) => (
+                <button
+                  key={`${photo}-${index}`}
+                  type="button"
+                  onClick={() => setActivePhotoIndex(index)}
+                  aria-label={`Go to photo ${index + 1}`}
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === activePhotoIndex ? "w-5 bg-white" : "w-1.5 bg-white/35"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
         </div>
+
+        {hasMultiplePhotos && (
+          <div className="flex gap-3 overflow-x-auto border-b border-white/5 px-5 py-4 scrollbar-hide">
+            {photos.map((photo, index) => (
+              <button
+                key={`${photo}-thumb-${index}`}
+                type="button"
+                onClick={() => setActivePhotoIndex(index)}
+                className={`h-16 w-20 shrink-0 overflow-hidden rounded-2xl border transition-all ${
+                  index === activePhotoIndex
+                    ? "border-kjc-accent opacity-100"
+                    : "border-white/10 opacity-55"
+                }`}
+              >
+                <img
+                  src={photo}
+                  alt={`Thumbnail ${index + 1}`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-7 p-7">
           <div>
@@ -170,6 +285,12 @@ export default function ListingDetailModal({
             {location.distance && (
               <p className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40">
                 {location.distance}
+              </p>
+            )}
+
+            {isHousing && housing.travelDurationLabel && (
+              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.18em] text-white/35">
+                {housing.travelDurationLabel}
               </p>
             )}
 
@@ -230,6 +351,8 @@ export default function ListingDetailModal({
                   src={poster.photoURL}
                   alt={posterName}
                   className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-lg font-black text-kjc-accent">

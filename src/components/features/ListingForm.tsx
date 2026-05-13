@@ -319,7 +319,21 @@ export default function ListingForm({
         );
 
         const folder = type === "housing" ? "housing" : "marketplace";
-        newPhotoURLs = await uploadMultipleImages(selectedImages, folder);
+        newPhotoURLs = await uploadMultipleImages(selectedImages, folder, (progress) => {
+  if (progress.stage === "preparing") {
+    setUploadStatus("Preparing images...");
+    return;
+  }
+
+  if (progress.stage === "compressing") {
+    setUploadStatus(`Preparing image ${progress.current}/${progress.total}...`);
+    return;
+  }
+
+  if (progress.stage === "uploading") {
+    setUploadStatus(`Uploading image ${progress.current}/${progress.total}...`);
+  }
+});
       }
 
       const photos = [...existingPhotos, ...newPhotoURLs];
@@ -415,7 +429,12 @@ export default function ListingForm({
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div
+  className="absolute inset-0 bg-black/80"
+  onClick={() => {
+    if (!loading) onClose();
+  }}
+/>
 
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
@@ -448,8 +467,11 @@ export default function ListingForm({
           </div>
 
           <button
-            type="button"
-            onClick={onClose}
+  type="button"
+  onClick={() => {
+    if (!loading) onClose();
+  }}
+  disabled={loading}
             className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97]"
           >
             <X size={24} />
