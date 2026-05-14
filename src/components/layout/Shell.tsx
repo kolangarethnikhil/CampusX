@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import AppFeedbackModal from "../features/AppFeedbackModal";
+import InstallAppPrompt from "../features/InstallAppPrompt";
+import { usePwaInstall } from "../../hooks/usePwaInstall";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
@@ -1322,6 +1324,7 @@ export default function Shell() {
   const [profileGateOpen, setProfileGateOpen] = useState(false);
   const [feedbackModal, setFeedbackModal] = useState<"issue" | "feedback" | null>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [installPromptOpen, setInstallPromptOpen] = useState(false);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
 
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
@@ -1347,6 +1350,7 @@ export default function Shell() {
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
   const { user, profile, profileCompleted, signIn, logout } = useAuth();
+  const pwaInstall = usePwaInstall();
 
   useEffect(() => {
     void loadData();
@@ -1364,6 +1368,16 @@ export default function Shell() {
     setPendingIntent(null);
     void runIntent(intent);
   }, [pendingIntent, user?.uid, profile?.profileCompleted, profileCompleted]);
+
+  useEffect(() => {
+    if (!user || !profileCompleted || !pwaInstall.canPrompt) return;
+
+    const timer = window.setTimeout(() => {
+      setInstallPromptOpen(true);
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [user?.uid, profileCompleted, pwaInstall.canPrompt]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1878,6 +1892,16 @@ export default function Shell() {
                       Report app issue
                     </button>
 
+                    {pwaInstall.canPrompt && (
+                      <button
+                        type="button"
+                        onClick={() => setInstallPromptOpen(true)}
+                        className="mt-3 w-full rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
+                      >
+                        Install CampusX app
+                      </button>
+                    )}
+
                     {!profileCompleted && (
                       <button
                         type="button"
@@ -2009,6 +2033,15 @@ export default function Shell() {
       <VerificationModal
         isOpen={verificationModalOpen}
         onClose={() => setVerificationModalOpen(false)}
+      />
+
+      <InstallAppPrompt
+        isOpen={installPromptOpen}
+        onClose={() => {
+          pwaInstall.dismiss();
+          setInstallPromptOpen(false);
+        }}
+        onInstall={pwaInstall.install}
       />
     </div>
   );
