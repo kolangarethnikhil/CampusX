@@ -6,7 +6,15 @@ import {
   useMap,
   useMapsLibrary,
 } from "@vis.gl/react-google-maps";
-import { Loader2, MapPin, Navigation, Search } from "lucide-react";
+import {
+  CheckCircle2,
+  Clipboard,
+  Loader2,
+  MapPin,
+  Move,
+  Navigation,
+  Search,
+} from "lucide-react";
 import { CAMPUS_SHORT_NAME, KJU_LOCATION } from "../../constants/campus";
 import { parseGoogleMapsLocation } from "../../utils/location";
 
@@ -22,18 +30,35 @@ interface LocationSelectorProps {
   initialLng?: number;
 }
 
+type LatLngLiteral = {
+  lat: number;
+  lng: number;
+};
+
 export default function LocationSelector({
   onLocationSelect,
   initialAddress,
   initialLat,
   initialLng,
 }: LocationSelectorProps) {
-  const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
+  const initialPosition =
+    typeof initialLat === "number" && typeof initialLng === "number"
+      ? { lat: initialLat, lng: initialLng }
+      : null;
+
+  const [selectedPlace, setSelectedPlace] =
+    useState<google.maps.places.PlaceResult | null>(null);
+  const [markerPosition, setMarkerPosition] =
+    useState<LatLngLiteral | null>(initialPosition);
   const [markerRef, marker] = useAdvancedMarkerRef();
   const [inputValue, setInputValue] = useState(initialAddress || "");
   const [placeAutocomplete, setPlaceAutocomplete] =
     useState<google.maps.places.Autocomplete | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [isResolvingPin, setIsResolvingPin] = useState(false);
+  const [lastAction, setLastAction] = useState<
+    "search" | "paste" | "drag" | "tap" | "current" | null
+  >(initialPosition ? "search" : null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const placesLib = useMapsLibrary("places");
@@ -42,39 +67,92 @@ export default function LocationSelector({
 
   const hasMaps = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
+  const updateSelectedLocation = async ({
+    position,
+    fallbackAddress,
+    googleMapsUrl,
+    action,
+    shouldReverseGeocode = true,
+  }: {
+    position: LatLngLiteral;
+    fallbackAddress: string;
+    googleMapsUrl?: string;
+    action: "search" | "paste" | "drag" | "tap" | "current";
+    shouldReverseGeocode?: boolean;
+  }) => {
+    setMarkerPosition(position);
+    setLastAction(action);
+
+    if (map) {
+      map.setCenter(position);
+      map.setZoom(17);
+    }
+
+    if (marker) {
+      marker.position = position;
+    }
+
+    if (!shouldReverseGeocode || !geocodingLib) {
+      setInputValue(fallbackAddress);
+      onLocationSelect({
+        address: fallbackAddress,
+        lat: position.lat,
+        lng: position.lng,
+        googleMapsUrl,
+      });
+      return;
+    }
+
+    setIsResolvingPin(true);
+
+    try {
+      const geocoder = new geocodingLib.Geocoder();
+      const { results } = await geocoder.geocode({ location: position });
+      const formattedAddress = results?.[0]?.formatted_address || fallbackAddress;
+
+      setInputValue(formattedAddress);
+      setSelectedPlace({
+        geometry: {
+          location: new google.maps.LatLng(position.lat, position.lng),
+        } as google.maps.places.PlaceGeometry,
+        formatted_address: formattedAddress,
+        name: formattedAddress.split(",")[0],
+      } as google.maps.places.PlaceResult);
+
+      onLocationSelect({
+        address: formattedAddress,
+        lat: position.lat,
+        lng: position.lng,
+        googleMapsUrl,
+      });
+    } catch (error) {
+      console.error("Reverse geocoding failed:", error);
+
+      setInputValue(fallbackAddress);
+      onLocationSelect({
+        address: fallbackAddress,
+        lat: position.lat,
+        lng: position.lng,
+        googleMapsUrl,
+      });
+    } finally {
+      setIsResolvingPin(false);
+    }
+  };
+
   const selectParsedLocation = (value: string) => {
     const parsed = parseGoogleMapsLocation(value);
     if (!parsed) return false;
 
     const address = `Pinned location near ${CAMPUS_SHORT_NAME}`;
 
-    onLocationSelect({
-      address,
-      lat: parsed.lat,
-      lng: parsed.lng,
+    updateSelectedLocation({
+      position: parsed,
+      fallbackAddress: address,
       googleMapsUrl: value,
+      action: "paste",
+      shouldReverseGeocode: true,
     });
-
-    if (typeof google !== "undefined") {
-      const place = {
-        geometry: {
-          location: new google.maps.LatLng(parsed.lat, parsed.lng),
-        } as google.maps.places.PlaceGeometry,
-        formatted_address: address,
-        name: address,
-      } as google.maps.places.PlaceResult;
-
-      setSelectedPlace(place);
-    }
-
-    if (map) {
-      map.setCenter(parsed);
-      map.setZoom(17);
-    }
-
-    if (marker) {
-      marker.position = parsed;
-    }
 
     return true;
   };
@@ -93,75 +171,43 @@ export default function LocationSelector({
     setIsLocating(true);
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const latLng = { lat: latitude, lng: longitude };
+      async (position) => {
+        const latLng = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
 
-        if (!geocodingLib) {
-          const address = `Current location near ${CAMPUS_SHORT_NAME}`;
+        await updateSelectedLocation({
+          position: latLng,
+          fallbackAddress: `Current location near ${CAMPUS_SHORT_NAME}`,
+          action: "current",
+          shouldReverseGeocode: true,
+        });
 
-          setInputValue(address);
-          onLocationSelect({
-            address,
-            lat: latitude,
-            lng: longitude,
-          });
-
-          setIsLocating(false);
-          return;
-        }
-
-        const geocoder = new geocodingLib.Geocoder();
-
-        geocoder
-          .geocode({ location: latLng })
-          .then(({ results }) => {
-            if (results?.[0]) {
-              const formattedAddress = results[0].formatted_address || "";
-
-              setInputValue(formattedAddress);
-              setSelectedPlace({
-                geometry: {
-                  location: new google.maps.LatLng(latitude, longitude),
-                } as google.maps.places.PlaceGeometry,
-                formatted_address: formattedAddress,
-                name: formattedAddress.split(",")[0],
-              } as google.maps.places.PlaceResult);
-
-              onLocationSelect({
-                address: formattedAddress,
-                lat: latitude,
-                lng: longitude,
-              });
-
-              if (map) {
-                map.setCenter(latLng);
-                map.setZoom(17);
-              }
-
-              if (marker) {
-                marker.position = latLng;
-              }
-            }
-          })
-          .catch((error) => {
-            console.error("Reverse geocoding failed:", error);
-            onLocationSelect({
-              address: `Current location near ${CAMPUS_SHORT_NAME}`,
-              lat: latitude,
-              lng: longitude,
-            });
-          })
-          .finally(() => {
-            setIsLocating(false);
-          });
+        setIsLocating(false);
       },
       (error) => {
         console.error("Failed to get current location:", error);
         setIsLocating(false);
         alert("Could not retrieve your location. Please enable location permissions.");
-      },
+      }
     );
+  };
+
+  const handleMapClick = (event: any) => {
+    const latLng = event?.detail?.latLng;
+
+    if (!latLng) return;
+
+    updateSelectedLocation({
+      position: {
+        lat: latLng.lat,
+        lng: latLng.lng,
+      },
+      fallbackAddress: `Pinned location near ${CAMPUS_SHORT_NAME}`,
+      action: "tap",
+      shouldReverseGeocode: true,
+    });
   };
 
   useEffect(() => {
@@ -181,13 +227,23 @@ export default function LocationSelector({
     const listener = placeAutocomplete.addListener("place_changed", () => {
       const place = placeAutocomplete.getPlace();
       setSelectedPlace(place);
-      setInputValue(place.formatted_address || place.name || "");
+
+      const address = place.formatted_address || place.name || "";
+      setInputValue(address);
 
       if (place.geometry?.location) {
-        onLocationSelect({
-          address: place.formatted_address || place.name || "",
+        const position = {
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
+        };
+
+        setMarkerPosition(position);
+        setLastAction("search");
+
+        onLocationSelect({
+          address,
+          lat: position.lat,
+          lng: position.lng,
         });
       }
     });
@@ -198,23 +254,68 @@ export default function LocationSelector({
   }, [onLocationSelect, placeAutocomplete]);
 
   useEffect(() => {
-    if (!map || !selectedPlace || !marker) return;
+    if (!map || !selectedPlace) return;
 
     if (selectedPlace.geometry?.viewport) {
       map.fitBounds(selectedPlace.geometry.viewport);
-    } else if (selectedPlace.geometry?.location) {
-      map.setCenter(selectedPlace.geometry.location);
-      map.setZoom(17);
+      return;
     }
 
     if (selectedPlace.geometry?.location) {
-      marker.position = selectedPlace.geometry.location;
+      map.setCenter(selectedPlace.geometry.location);
+      map.setZoom(17);
     }
-  }, [map, selectedPlace, marker]);
+  }, [map, selectedPlace]);
+
+  useEffect(() => {
+    if (!marker) return;
+
+    marker.gmpDraggable = true;
+    marker.title = "Drag pin to exact room location";
+
+    const listener = marker.addListener("dragend", () => {
+      const position = marker.position;
+
+      if (!position) return;
+
+      const lat =
+        typeof position.lat === "function"
+          ? position.lat()
+          : Number((position as google.maps.LatLngLiteral).lat);
+
+      const lng =
+        typeof position.lng === "function"
+          ? position.lng()
+          : Number((position as google.maps.LatLngLiteral).lng);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      updateSelectedLocation({
+        position: { lat, lng },
+        fallbackAddress: `Pinned location near ${CAMPUS_SHORT_NAME}`,
+        action: "drag",
+        shouldReverseGeocode: true,
+      });
+    });
+
+    return () => {
+      listener.remove();
+    };
+  }, [geocodingLib, marker, map]);
 
   if (!hasMaps) {
     return (
       <div className="space-y-4">
+        <div className="rounded-[28px] border border-kjc-accent/20 bg-kjc-accent/10 p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent">
+            Location guide
+          </p>
+          <p className="mt-2 text-xs font-bold leading-relaxed text-white/55">
+            Paste coordinates or a long Google Maps link. Map preview is disabled until
+            Google Maps key is configured.
+          </p>
+        </div>
+
         <div className="relative group">
           <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 transition-colors group-focus-within:text-kjc-accent">
             <MapPin size={20} />
@@ -255,6 +356,35 @@ export default function LocationSelector({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-[28px] border border-kjc-accent/20 bg-kjc-accent/10 p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent">
+          Pick exact room location
+        </p>
+
+        <div className="mt-4 grid gap-3">
+          <div className="flex items-start gap-3">
+            <Search size={16} className="mt-0.5 shrink-0 text-kjc-accent" />
+            <p className="text-xs font-bold leading-relaxed text-white/60">
+              Search the building, road, or area name.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <Clipboard size={16} className="mt-0.5 shrink-0 text-kjc-accent" />
+            <p className="text-xs font-bold leading-relaxed text-white/60">
+              Paste a long Google Maps link with coordinates.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <Move size={16} className="mt-0.5 shrink-0 text-kjc-accent" />
+            <p className="text-xs font-bold leading-relaxed text-white/60">
+              Drag the pin or tap the map to adjust the exact gate/building.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="relative flex gap-3">
         <div className="relative flex-1 group">
           <div className="absolute left-5 top-1/2 -translate-y-1/2 text-white/30 transition-colors group-focus-within:text-kjc-accent">
@@ -265,7 +395,7 @@ export default function LocationSelector({
             ref={inputRef}
             value={inputValue}
             onChange={(event) => handleInputChange(event.target.value)}
-            placeholder="Paste Google Maps link or search address"
+            placeholder="Search address or paste Google Maps link"
             className="input-pro pl-14"
           />
         </div>
@@ -273,38 +403,34 @@ export default function LocationSelector({
         <button
           type="button"
           onClick={handleCurrentLocation}
-          disabled={isLocating}
-          className="relative flex aspect-square w-[64px] items-center justify-center rounded-3xl bg-kjc-accent text-white shadow-[0_15px_30px_rgba(139,92,246,0.2)] transition-all hover:bg-kjc-accent/90 active:scale-90 disabled:opacity-50"
+          disabled={isLocating || isResolvingPin}
+          className="relative flex aspect-square w-[64px] items-center justify-center rounded-3xl bg-kjc-accent text-white shadow-[0_15px_30px_rgba(139,92,246,0.2)] transition-transform duration-150 ease-out hover:bg-kjc-accent/90 active:scale-90 disabled:opacity-50"
           title="Use current location"
         >
-          {isLocating && (
+          {(isLocating || isResolvingPin) && (
             <span className="absolute inset-0 animate-ping rounded-3xl bg-kjc-accent opacity-20" />
           )}
 
-          {isLocating ? (
+          {isLocating || isResolvingPin ? (
             <Loader2 size={24} className="animate-spin" />
           ) : (
-            <Navigation size={24} className="transition-transform group-hover:rotate-12" />
+            <Navigation size={24} />
           )}
         </button>
       </div>
 
-      <div className="relative h-72 w-full overflow-hidden rounded-[32px] border border-white/10 bg-white/5 shadow-inner">
+      <div className="relative h-80 w-full overflow-hidden rounded-[32px] border border-white/10 bg-white/5 shadow-inner">
         <Map
           defaultZoom={15}
-          defaultCenter={
-            initialLat && initialLng ? { lat: initialLat, lng: initialLng } : KJU_LOCATION
-          }
+          defaultCenter={markerPosition || KJU_LOCATION}
           mapId="DEMO_MAP_ID"
           gestureHandling="greedy"
           disableDefaultUI
           className="h-full w-full"
+          onClick={handleMapClick}
         >
-          <AdvancedMarker
-            ref={markerRef}
-            position={initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null}
-          >
-            <div className="relative">
+          <AdvancedMarker ref={markerRef} position={markerPosition}>
+            <div className="relative cursor-grab active:cursor-grabbing">
               <div className="absolute -inset-4 animate-pulse rounded-full bg-kjc-accent/20 blur-sm" />
               <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-[18px] border-4 border-white bg-kjc-accent text-white shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
                 <MapPin size={24} />
@@ -313,20 +439,44 @@ export default function LocationSelector({
           </AdvancedMarker>
         </Map>
 
-        {!selectedPlace && !initialLat && (
+        {!markerPosition && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 px-10 backdrop-blur-[1px]">
             <div className="rounded-[20px] border border-white/20 bg-black/70 px-6 py-3 shadow-xl">
               <p className="text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
-                Search or paste map link
+                Search, paste link, or tap map
               </p>
+            </div>
+          </div>
+        )}
+
+        {markerPosition && (
+          <div className="absolute bottom-4 left-4 right-4 rounded-[22px] border border-white/10 bg-black/70 px-5 py-4 backdrop-blur-xl">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">
+                  {lastAction === "drag"
+                    ? "Pin adjusted"
+                    : lastAction === "tap"
+                      ? "Map location selected"
+                      : lastAction === "paste"
+                        ? "Maps link detected"
+                        : lastAction === "current"
+                          ? "Current location selected"
+                          : "Location selected"}
+                </p>
+                <p className="mt-1 truncate text-[11px] font-bold text-white/40">
+                  {isResolvingPin ? "Finding address..." : inputValue || "Pinned location"}
+                </p>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       <p className="px-2 text-[10px] font-bold leading-relaxed text-white/35">
-        Tip: long Google Maps links with coordinates work now. Short maps.app.goo.gl links will be
-        supported after backend resolver.
+        Tip: drag the pin after search if Google places it on the wrong side of the
+        road. Short maps.app.goo.gl links will be supported after backend resolver.
       </p>
     </div>
   );

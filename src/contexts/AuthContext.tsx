@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
+  browserLocalPersistence,
   onAuthStateChanged,
   GoogleAuthProvider,
+  setPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -100,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const newProfile: UserProfile = {
           uid: currentUser.uid,
           email,
-          displayName: currentUser.displayName || "KJC User",
+          displayName: currentUser.displayName || "CampusX user",
           photoURL: currentUser.photoURL || "",
           collegeEmail: officialKjcEmail ? email : "",
           campusRole: officialKjcEmail ? "Student" : "Alumni",
@@ -123,26 +125,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async () => {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
 
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error: any) {
-      console.error("Google sign-in failed:", error);
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithPopup(auth, provider);
+  } catch (error: any) {
+    console.error("Google sign-in failed:", error);
 
-      if (
-        error.code === "auth/popup-blocked" ||
-        error.code === "auth/cancelled-popup-request" ||
-        error.code === "auth/popup-closed-by-user"
-      ) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-
-      alert(error.message || "Google sign-in failed.");
+    if (
+      error.code === "auth/popup-blocked" ||
+      error.code === "auth/cancelled-popup-request" ||
+      error.code === "auth/popup-closed-by-user"
+    ) {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithRedirect(auth, provider);
+      return;
     }
-  };
+
+    alert(error.message || "Google sign-in failed.");
+  }
+};
 
   const logout = async () => {
     await signOut(auth);
