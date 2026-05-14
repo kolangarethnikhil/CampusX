@@ -1477,6 +1477,9 @@ export default function Shell() {
         onCloseListing={handleCloseListing}
         onReopenListing={handleReopenListing}
         onMarkSold={handleMarkSold}
+        isPosterBlocked={
+          selectedListing ? blockedUserIds.includes(selectedListing.postedBy) : false
+        }
         onReport={handleOpenReport}
         onBlockUser={handleBlockUser}
       />
