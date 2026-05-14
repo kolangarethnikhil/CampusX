@@ -28,7 +28,7 @@ import {
   HousingListing,
   HousingRoomType,
   reopenHousingListing,
-} from "../../services/housingService.ts";
+} from "../../services/housingService";
 import {
   closeMarketListing,
   deleteMarketListing,
@@ -55,6 +55,7 @@ import ListingDetailModal from "../features/ListingDetailModal";
 import UserProfilePreview from "../features/UserProfilePreview";
 import HousingMapView from "../features/HousingMapView";
 import ReportListingModal from "../features/ReportListingModal";
+import ProfileCompletionModal from "../features/ProfileCompletionModal";
 import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 
 type Tab = "home" | "search" | "inbox" | "me";
@@ -68,6 +69,21 @@ type HousingFilters = {
   furnishing: "All" | HousingFurnishing;
   availableOnly: boolean;
 };
+
+type PendingIntent =
+  | { kind: "post" }
+  | {
+      kind: "contact";
+      ownerId: string;
+      listingId: string;
+      title: string;
+      listingType: string;
+    }
+  | {
+      kind: "report";
+      listing: HousingListing | MarketListing;
+      listingType: ListingType;
+    };
 
 const initialHousingFilters: HousingFilters = {
   roomType: "All",
@@ -156,7 +172,7 @@ function BottomNav({
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
-  onAddClick: () => void;
+  onAddClick: () => void | Promise<void>;
 }) {
   const tabs = [
     { id: "home", icon: Home, label: "Home" },
@@ -173,7 +189,7 @@ function BottomNav({
           key={tab.id}
           type="button"
           onClick={() => {
-            if (tab.id === "add") onAddClick();
+            if (tab.id === "add") void onAddClick();
             else onTabChange(tab.id as Tab);
           }}
           className={`relative flex items-center justify-center transition-transform duration-150 ease-out active:scale-[0.97] ${
@@ -416,8 +432,8 @@ function ListingCard({
           <div className="flex flex-col gap-2">
             <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white shadow-xl">
               {isHousing
-  ? formatHousingRoomType(housingListing.roomType)
-  : marketListing.category || "Item"}
+                ? formatHousingRoomType(housingListing.roomType)
+                : marketListing.category || "Item"}
             </span>
 
             {isOwner && (
@@ -866,12 +882,12 @@ function HousingFilterModal({
               className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
             >
               <option value="All">All</option>
-<option value="roommate">Roommate</option>
-<option value="1RK">1RK</option>
-<option value="1BHK">1BHK</option>
-<option value="2BHK">2BHK</option>
-<option value="3BHK">3BHK</option>
-<option value="PG">PG</option>
+              <option value="roommate">Roommate</option>
+              <option value="1RK">1RK</option>
+              <option value="1BHK">1BHK</option>
+              <option value="2BHK">2BHK</option>
+              <option value="3BHK">3BHK</option>
+              <option value="PG">PG</option>
             </select>
           </div>
 
@@ -1177,6 +1193,7 @@ function Chattery({
                 <h4 className="truncate text-sm font-semibold text-white">
                   {selectedChat.listingTitle}
                 </h4>
+
                 {listingPrice && (
                   <span className="shrink-0 text-sm font-black text-kjc-accent">
                     ₹{listingPrice}
@@ -1220,9 +1237,10 @@ function Chattery({
             placeholder="Type a message..."
             className="input-pro flex-1"
             onKeyDown={(event) => {
-              if (event.key === "Enter") handleSend();
+              if (event.key === "Enter") void handleSend();
             }}
           />
+
           <button
             type="button"
             onClick={handleSend}
@@ -1300,6 +1318,9 @@ export default function Shell() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
+  const [profileGateOpen, setProfileGateOpen] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
+
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
   const [marketData, setMarketData] = useState<MarketListing[]>([]);
   const [myHousingData, setMyHousingData] = useState<HousingListing[]>([]);
@@ -1322,11 +1343,24 @@ export default function Shell() {
   const [editingListing, setEditingListing] = useState<HousingListing | MarketListing | null>(null);
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
-  const { user, profile, signIn, logout } = useAuth();
+  const { user, profile, profileCompleted, signIn, logout } = useAuth();
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [activeTab, user?.uid]);
+
+  useEffect(() => {
+    if (!pendingIntent || !user || !profile) return;
+
+    if (!profileCompleted) {
+      setProfileGateOpen(true);
+      return;
+    }
+
+    const intent = pendingIntent;
+    setPendingIntent(null);
+    void runIntent(intent);
+  }, [pendingIntent, user?.uid, profile?.profileCompleted, profileCompleted]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1535,14 +1569,11 @@ export default function Shell() {
     }
   };
 
-  const handleOpenReport = (
+  const openReportFlow = (
     listing: HousingListing | MarketListing,
     type: ListingType
   ) => {
-    if (!user) {
-      signIn();
-      return;
-    }
+    if (!user) return;
 
     if (listing.postedBy === user.uid) {
       alert("You cannot report your own post.");
@@ -1553,52 +1584,13 @@ export default function Shell() {
     setReportListingType(type);
   };
 
-  const handleBlockUser = async (userIdToBlock: string) => {
-    if (!user) {
-      await signIn();
-      return;
-    }
-
-    if (user.uid === userIdToBlock) {
-      alert("You cannot block yourself.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Block this user? Their posts and chats will be hidden for you."
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await blockUser(userIdToBlock);
-
-      setBlockedUserIds((prev) =>
-        prev.includes(userIdToBlock) ? prev : [...prev, userIdToBlock]
-      );
-
-      setHousingData((prev) =>
-        prev.filter((listing) => listing.postedBy !== userIdToBlock)
-      );
-
-      setMarketData((prev) =>
-        prev.filter((listing) => listing.postedBy !== userIdToBlock)
-      );
-
-      closeListingDetail();
-
-      alert("User blocked.");
-    } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Could not block user.");
-    }
-  };
-
-  const handleContact = async (ownerId: string, listingId: string, title: string, type: string) => {
-    if (!user) {
-      await signIn();
-      return;
-    }
+  const startContactFlow = async (
+    ownerId: string,
+    listingId: string,
+    title: string,
+    type: string
+  ) => {
+    if (!user) return;
 
     if (ownerId === user.uid) {
       alert("This is your own post. Use Manage post to edit or close it.");
@@ -1645,6 +1637,110 @@ export default function Shell() {
       console.error(error);
       alert(error instanceof Error ? error.message : "Could not start chat");
     }
+  };
+
+  const runIntent = async (intent: PendingIntent) => {
+    if (intent.kind === "post") {
+      setIsModalOpen(true);
+      return;
+    }
+
+    if (intent.kind === "contact") {
+      await startContactFlow(
+        intent.ownerId,
+        intent.listingId,
+        intent.title,
+        intent.listingType
+      );
+      return;
+    }
+
+    if (intent.kind === "report") {
+      openReportFlow(intent.listing, intent.listingType);
+    }
+  };
+
+  const requireProfileReady = async (intent: PendingIntent) => {
+    if (!user) {
+      setPendingIntent(intent);
+      await signIn();
+      return;
+    }
+
+    if (!profileCompleted) {
+      setPendingIntent(intent);
+      setProfileGateOpen(true);
+      return;
+    }
+
+    await runIntent(intent);
+  };
+
+  const handleOpenReport = (
+    listing: HousingListing | MarketListing,
+    type: ListingType
+  ) => {
+    void requireProfileReady({
+      kind: "report",
+      listing,
+      listingType: type,
+    });
+  };
+
+  const handleBlockUser = async (userIdToBlock: string) => {
+    if (!user) {
+      await signIn();
+      return;
+    }
+
+    if (user.uid === userIdToBlock) {
+      alert("You cannot block yourself.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Block this user? Their posts and chats will be hidden for you."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await blockUser(userIdToBlock);
+
+      setBlockedUserIds((prev) =>
+        prev.includes(userIdToBlock) ? prev : [...prev, userIdToBlock]
+      );
+
+      setHousingData((prev) =>
+        prev.filter((listing) => listing.postedBy !== userIdToBlock)
+      );
+
+      setMarketData((prev) =>
+        prev.filter((listing) => listing.postedBy !== userIdToBlock)
+      );
+
+      closeListingDetail();
+
+      alert("User blocked.");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not block user.");
+    }
+  };
+
+  const handleContact = async (
+    ownerId: string,
+    listingId: string,
+    title: string,
+    type: string
+  ) => {
+    await requireProfileReady({
+      kind: "contact",
+      ownerId,
+      listingId,
+      title,
+      listingType: type,
+    });
   };
 
   const filterBySearch = <T extends { title: string; description?: string }>(items: T[]) => {
@@ -1748,9 +1844,20 @@ export default function Shell() {
                     </div>
 
                     <h2 className="text-4xl pro-heading">{profile?.displayName || "CampusX User"}</h2>
+
                     <p className="mt-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">
                       {profile?.campusRole || "Student"}
                     </p>
+
+                    {!profileCompleted && (
+                      <button
+                        type="button"
+                        onClick={() => setProfileGateOpen(true)}
+                        className="mt-6 rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent"
+                      >
+                        Complete profile
+                      </button>
+                    )}
                   </div>
 
                   <MyPostsPage
@@ -1777,13 +1884,7 @@ export default function Shell() {
       <BottomNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onAddClick={() => {
-          if (!user) {
-            signIn();
-            return;
-          }
-          setIsModalOpen(true);
-        }}
+        onAddClick={() => requireProfileReady({ kind: "post" })}
       />
 
       <HousingFilterModal
@@ -1792,6 +1893,20 @@ export default function Shell() {
         onChange={setHousingFilters}
         onClear={() => setHousingFilters(initialHousingFilters)}
         onClose={() => setShowFilters(false)}
+      />
+
+      <ProfileCompletionModal
+        isOpen={profileGateOpen}
+        canClose={false}
+        onComplete={async () => {
+          setProfileGateOpen(false);
+
+          if (pendingIntent) {
+            const intent = pendingIntent;
+            setPendingIntent(null);
+            await runIntent(intent);
+          }
+        }}
       />
 
       <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
@@ -1808,36 +1923,49 @@ export default function Shell() {
         />
       )}
 
-     <ListingDetailModal
-  isOpen={Boolean(selectedListing)}
-  listing={selectedListing}
-  type={selectedListingType}
-  currentUserId={user?.uid || null}
-  onClose={closeListingDetail}
-  onContact={handleContact}
-  poster={selectedPoster}
-  onOpenPoster={() => {
-    if (selectedListing?.postedBy) {
-      openUserProfile(selectedListing.postedBy);
-    }
-  }}
-  onEdit={handleEditListing}
-  onDelete={handleDeleteListing}
-  onCloseListing={handleCloseListing}
-  onReopenListing={handleReopenListing}
-  onMarkSold={handleMarkSold}
-/> 
+      <ListingDetailModal
+        isOpen={Boolean(selectedListing)}
+        listing={selectedListing}
+        type={selectedListingType}
+        currentUserId={user?.uid || null}
+        onClose={closeListingDetail}
+        onContact={handleContact}
+        poster={selectedPoster}
+        onOpenPoster={() => {
+          if (selectedListing?.postedBy) {
+            openUserProfile(selectedListing.postedBy);
+          }
+        }}
+        onEdit={handleEditListing}
+        onDelete={handleDeleteListing}
+        onCloseListing={handleCloseListing}
+        onReopenListing={handleReopenListing}
+        onMarkSold={handleMarkSold}
+        isPosterBlocked={
+          selectedListing ? blockedUserIds.includes(selectedListing.postedBy) : false
+        }
+        onReport={handleOpenReport}
+        onBlockUser={handleBlockUser}
+      />
 
-<UserProfilePreview
-  isOpen={isUserPreviewOpen}
-  onClose={() => setIsUserPreviewOpen(false)}
-  user={selectedUserProfile}
-/>
+      <UserProfilePreview
+        isOpen={isUserPreviewOpen}
+        onClose={() => setIsUserPreviewOpen(false)}
+        user={selectedUserProfile}
+      />
 
-<VerificationModal
-  isOpen={verificationModalOpen}
-  onClose={() => setVerificationModalOpen(false)}
-/>
+      <ReportListingModal
+        isOpen={Boolean(reportListing)}
+        listing={reportListing}
+        type={reportListingType}
+        currentUserId={user?.uid || null}
+        onClose={() => setReportListing(null)}
+      />
+
+      <VerificationModal
+        isOpen={verificationModalOpen}
+        onClose={() => setVerificationModalOpen(false)}
+      />
     </div>
   );
-} 
+}

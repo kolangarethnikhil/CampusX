@@ -12,8 +12,20 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
-export type CampusRole = "Student" | "Alumni" | "Landlord" | "Seller";
+export type CampusRole = "Student" | "Alumni" | "Campus Community" | "Landlord" | "Seller";
 export type VerifiedStatus = "unverified" | "pending" | "verified";
+export type GenderOption = "male" | "female" | "prefer_not_to_say";
+export type DiscoverySource =
+  | "instagram"
+  | "friends"
+  | "whatsapp"
+  | "college"
+  | "other";
+export type CommunityIntent =
+  | "explore"
+  | "utility"
+  | "business"
+  | "other";
 
 export interface UserProfile {
   uid: string;
@@ -23,11 +35,16 @@ export interface UserProfile {
   collegeEmail?: string;
   campusRole: CampusRole;
   verifiedStatus: VerifiedStatus;
+  gender?: GenderOption;
   batch?: string;
   course?: string;
   bio?: string;
   passedOutYear?: string;
   currentLocation?: string;
+  hometown?: string;
+  discoverySource?: DiscoverySource;
+  communityIntent?: CommunityIntent;
+  profileCompleted?: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -37,6 +54,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   isKjcEmail: boolean;
+  profileCompleted: boolean;
   signIn: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
@@ -52,12 +70,35 @@ const isOfficialKjcEmail = (email?: string | null) => {
   );
 };
 
+function isProfileComplete(profile: UserProfile | null) {
+  if (!profile) return false;
+
+  if (!profile.displayName?.trim()) return false;
+  if (!profile.campusRole) return false;
+  if (!profile.gender) return false;
+  if (!profile.currentLocation?.trim()) return false;
+  if (!profile.discoverySource) return false;
+
+  if (profile.campusRole === "Student" || profile.campusRole === "Alumni") {
+    if (!profile.course?.trim()) return false;
+    if (!profile.batch?.trim()) return false;
+  }
+
+  if (profile.campusRole === "Campus Community" && !profile.communityIntent) {
+    return false;
+  }
+
+  return Boolean(profile.profileCompleted);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setLoading(true);
 
@@ -105,8 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: currentUser.displayName || "CampusX user",
           photoURL: currentUser.photoURL || "",
           collegeEmail: officialKjcEmail ? email : "",
-          campusRole: officialKjcEmail ? "Student" : "Alumni",
+          campusRole: officialKjcEmail ? "Student" : "Campus Community",
           verifiedStatus: officialKjcEmail ? "verified" : "unverified",
+          profileCompleted: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
@@ -125,28 +167,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async () => {
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: "select_account" });
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
 
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-    await signInWithPopup(auth, provider);
-  } catch (error: any) {
-    console.error("Google sign-in failed:", error);
-
-    if (
-      error.code === "auth/popup-blocked" ||
-      error.code === "auth/cancelled-popup-request" ||
-      error.code === "auth/popup-closed-by-user"
-    ) {
+    try {
       await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
-      return;
-    }
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error("Google sign-in failed:", error);
 
-    alert(error.message || "Google sign-in failed.");
-  }
-};
+      if (
+        error.code === "auth/popup-blocked" ||
+        error.code === "auth/cancelled-popup-request" ||
+        error.code === "auth/popup-closed-by-user"
+      ) {
+        await setPersistence(auth, browserLocalPersistence);
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
+      alert(error.message || "Google sign-in failed.");
+    }
+  };
 
   const logout = async () => {
     await signOut(auth);
@@ -159,9 +201,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const safeData = { ...data };
 
+    safeData.uid = profile.uid;
+    safeData.email = profile.email;
+
     if (!isOfficialKjcEmail(user.email)) {
       delete safeData.verifiedStatus;
+      delete safeData.collegeEmail;
     }
+
+    const nextProfile = {
+      ...profile,
+      ...safeData,
+    };
 
     const docRef = doc(db, "users", user.uid);
 
@@ -169,12 +220,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       docRef,
       {
         ...safeData,
+        profileCompleted: isProfileComplete({
+          ...nextProfile,
+          profileCompleted: true,
+        }),
         updatedAt: serverTimestamp(),
       },
       { merge: true }
     );
 
-    setProfile((prev) => (prev ? { ...prev, ...safeData } : prev));
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            ...safeData,
+            profileCompleted: isProfileComplete({
+              ...prev,
+              ...safeData,
+              profileCompleted: true,
+            }),
+          }
+        : prev
+    );
   };
 
   return (
@@ -184,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile,
         loading,
         isKjcEmail: isOfficialKjcEmail(user?.email),
+        profileCompleted: isProfileComplete(profile),
         signIn,
         logout,
         updateProfile,
