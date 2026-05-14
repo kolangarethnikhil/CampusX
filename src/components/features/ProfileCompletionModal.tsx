@@ -93,19 +93,20 @@ export default function ProfileCompletionModal({
     setSaving(true);
 
     try {
-      await updateProfile({
-        displayName: displayName.trim(),
-        campusRole,
-        gender,
-        course: requiresAcademicInfo ? course.trim() : "",
-        batch: requiresAcademicInfo ? batch.trim() : "",
-        currentLocation: currentLocation.trim(),
-        hometown: currentLocation.trim(),
-        discoverySource,
-        communityIntent:
-          campusRole === "Campus Community" ? communityIntent : undefined,
-        profileCompleted: true,
-      });
+      const payload = {
+  displayName: displayName.trim(),
+  campusRole,
+  gender,
+  course: requiresAcademicInfo ? course.trim() : "",
+  batch: requiresAcademicInfo ? batch.trim() : "",
+  currentLocation: currentLocation.trim(),
+  hometown: currentLocation.trim(),
+  discoverySource,
+  profileCompleted: true,
+  ...(campusRole === "Campus Community" ? { communityIntent } : {}),
+};
+
+await updateProfile(payload);
 
       await onComplete?.();
     } catch (error) {
@@ -127,7 +128,9 @@ export default function ProfileCompletionModal({
         aria-label="Close profile completion"
       />
 
-      <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[44px] border border-white/10 bg-black p-8 shadow-pro-lg scrollbar-hide sm:rounded-[44px]">
+      <div
+        className="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[44px] border border-white/10 bg-black p-8 pb-10 shadow-pro-lg scrollbar-hide sm:rounded-[44px]"
+      >
         <div className="mb-8 flex items-start justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.28em] text-kjc-accent">

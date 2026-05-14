@@ -199,7 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user || !profile) throw new Error("User not authenticated");
 
-    const safeData = { ...data };
+    const safeData = removeUndefined({ ...data });
 
     safeData.uid = profile.uid;
     safeData.email = profile.email;
@@ -261,7 +261,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
+function removeUndefined<T extends Record<string, unknown>>(data: T) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as Partial<T>;
+}
 export function useAuth() {
   const context = useContext(AuthContext);
 
