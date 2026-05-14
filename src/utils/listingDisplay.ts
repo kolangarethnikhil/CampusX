@@ -1,4 +1,4 @@
-import { HousingListing } from "../services/housingService";
+import { HousingListing } from "../services/housingService.ts";
 
 export function getHousingLocationDisplay(listing: HousingListing): {
   address: string;

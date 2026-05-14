@@ -22,6 +22,10 @@ service cloud.firestore {
       return value is string && value.size() > 0 && value.size() <= max;
     }
 
+    function optionalString(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
     match /users/{userId} {
       allow get: if signedIn();
       allow list: if false;
@@ -109,15 +113,22 @@ service cloud.firestore {
           'status',
           'latitude',
           'longitude',
-          'formattedAddress'
+          'formattedAddress',
+          'availableFrom'
         ])
         && validString(data.title, 100)
         && validString(data.description, 2000)
-        && data.roomType in ['single', 'shared', '1BHK', '2BHK', 'PG']
+        && data.roomType in ['roommate', '1RK', '1BHK', '2BHK', '3BHK', 'PG']
         && data.rent is number
         && data.rent > 0
         && data.deposit is number
         && data.deposit >= 0
+        && (!('maintenance' in data) || data.maintenance is number)
+        && (!('maintenance' in data) || data.maintenance >= 0)
+        && optionalString(data.restrictions, 1000)
+        && data.preferTenants in ['girls_only', 'boys_only', 'both', 'couples']
+        && data.furnishing in ['Unfurnished', 'Semi-furnished', 'Fully-furnished']
+        && validString(data.availableFrom, 40)
         && data.latitude is number
         && data.longitude is number
         && validString(data.formattedAddress, 500)

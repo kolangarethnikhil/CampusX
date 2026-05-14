@@ -21,11 +21,14 @@ import { db } from "../../lib/firebase";
 import {
   closeHousingListing,
   deleteHousingListing,
+  formatHousingRoomType,
   getHousingListings,
   getMyHousingListings,
+  HousingFurnishing,
   HousingListing,
+  HousingRoomType,
   reopenHousingListing,
-} from "../../services/housingService";
+} from "../../services/housingService.ts";
 import {
   closeMarketListing,
   deleteMarketListing,
@@ -58,11 +61,11 @@ type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
 
 type HousingFilters = {
-  roomType: "All" | "single" | "shared" | "1BHK" | "2BHK" | "PG";
+  roomType: "All" | HousingRoomType;
   maxRent: string;
   maxDeposit: string;
   maxDistanceKm: string;
-  furnishing: "All" | "Unfurnished" | "Semi-furnished" | "Fully-furnished";
+  furnishing: "All" | HousingFurnishing;
   availableOnly: boolean;
 };
 
@@ -412,7 +415,9 @@ function ListingCard({
         <div className="absolute left-5 right-5 top-5 flex items-start justify-between">
           <div className="flex flex-col gap-2">
             <span className="rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white shadow-xl">
-              {isHousing ? housingListing.roomType || "Room" : marketListing.category || "Item"}
+              {isHousing
+  ? formatHousingRoomType(housingListing.roomType)
+  : marketListing.category || "Item"}
             </span>
 
             {isOwner && (
@@ -861,11 +866,12 @@ function HousingFilterModal({
               className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
             >
               <option value="All">All</option>
-              <option value="single">Single</option>
-              <option value="shared">Shared</option>
-              <option value="1BHK">1BHK</option>
-              <option value="2BHK">2BHK</option>
-              <option value="PG">PG</option>
+<option value="roommate">Roommate</option>
+<option value="1RK">1RK</option>
+<option value="1BHK">1BHK</option>
+<option value="2BHK">2BHK</option>
+<option value="3BHK">3BHK</option>
+<option value="PG">PG</option>
             </select>
           </div>
 

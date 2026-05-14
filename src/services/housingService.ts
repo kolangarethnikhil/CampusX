@@ -12,23 +12,48 @@ import {
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 
+const COLLECTION_NAME = "housing_listings";
+
+export type HousingRoomType =
+  | "roommate"
+  | "1RK"
+  | "1BHK"
+  | "2BHK"
+  | "3BHK"
+  | "PG";
+
+export type HousingTenantPreference =
+  | "girls_only"
+  | "boys_only"
+  | "both"
+  | "couples";
+
+export type HousingFurnishing =
+  | "Unfurnished"
+  | "Semi-furnished"
+  | "Fully-furnished";
+
 export interface HousingListing {
   id: string;
   title: string;
-  roomType: "single" | "shared" | "1BHK" | "2BHK" | "PG";
+  roomType: HousingRoomType;
   rent: number;
   deposit: number;
-  furnishing?: "Unfurnished" | "Semi-furnished" | "Fully-furnished";
-  preferTenants?: "Bachelors" | "Girls Only" | "Boys Only" | "Any";
+  furnishing?: HousingFurnishing;
+  preferTenants?: HousingTenantPreference;
+
   location: string;
   distance: string;
   availableFrom: string;
   maintenance?: number;
+  restrictions?: string;
+
   genderPreference: "male" | "female" | "none";
   amenities: string[];
   photos: string[];
   postedBy: string;
   status: "available" | "reserved" | "closed";
+
   latitude?: number;
   longitude?: number;
   formattedAddress?: string;
@@ -36,7 +61,6 @@ export interface HousingListing {
 
   distanceFromCollegeKm?: number;
   distanceLabel?: string;
-
   travelDistanceMeters?: number;
   travelDistanceLabel?: string;
   travelDurationLabel?: string;
@@ -45,8 +69,6 @@ export interface HousingListing {
   createdAt: any;
   updatedAt?: any;
 }
-
-const COLLECTION_NAME = "housing_listings";
 
 export async function getHousingListings(filters?: {
   roomType?: string;
@@ -145,4 +167,34 @@ export async function deleteHousingListing(listingId: string): Promise<void> {
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, COLLECTION_NAME);
   }
+}
+
+export function formatHousingRoomType(roomType?: HousingRoomType | string) {
+  if (!roomType) return "Room";
+
+  const labels: Record<string, string> = {
+    roommate: "Roommate",
+    "1RK": "1RK",
+    "1BHK": "1BHK",
+    "2BHK": "2BHK",
+    "3BHK": "3BHK",
+    PG: "PG",
+  };
+
+  return labels[roomType] || roomType;
+}
+
+export function formatTenantPreference(
+  preference?: HousingTenantPreference | string
+) {
+  if (!preference) return "Both";
+
+  const labels: Record<string, string> = {
+    girls_only: "Girls only",
+    boys_only: "Boys only",
+    both: "Both",
+    couples: "Couples allowed",
+  };
+
+  return labels[preference] || preference;
 }

@@ -2,7 +2,10 @@ import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
 import { Home, IndianRupee, MapPin, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { KJU_LOCATION } from "../../constants/campus";
-import { HousingListing } from "../../services/housingService";
+import {
+  formatHousingRoomType,
+  HousingListing,
+} from "../../services/housingService.ts";
 import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 
 interface HousingMapViewProps {
@@ -232,10 +235,5 @@ function formatRent(rent: number): string {
 }
 
 function formatRoomType(roomType?: string): string {
-  if (!roomType) return "Room";
-
-  if (roomType.toLowerCase() === "single") return "Single";
-  if (roomType.toLowerCase() === "shared") return "Shared";
-
-  return roomType.toUpperCase();
+  return formatHousingRoomType(roomType);
 }

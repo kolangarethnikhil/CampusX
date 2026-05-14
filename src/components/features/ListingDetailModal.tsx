@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Ban,
+  CalendarDays,
   Edit3,
   ExternalLink,
   Flag,
@@ -13,8 +14,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   Trash2,
+  Users,
 } from "lucide-react";
-import { HousingListing } from "../../services/housingService";
+import {
+  formatHousingRoomType,
+  formatTenantPreference,
+  HousingListing,
+} from "../../services/housingService.ts";
 import { MarketListing } from "../../services/marketService";
 import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 
@@ -60,6 +66,19 @@ interface ListingDetailModalProps {
     type: "housing" | "market"
   ) => void;
   onBlockUser?: (userId: string) => void | Promise<void>;
+}
+
+function formatDateLabel(value?: string) {
+  if (!value) return "Immediately";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function ListingDetailModal({
@@ -179,6 +198,7 @@ export default function ListingDetailModal({
               <p className="truncate text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
                 Listing details
               </p>
+
               {isOwner && (
                 <p className="mt-1 text-[9px] font-black uppercase tracking-[0.22em] text-kjc-accent">
                   Your post
@@ -222,7 +242,7 @@ export default function ListingDetailModal({
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
 
             <div className="absolute left-5 top-5 rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
-              {isHousing ? housing.roomType : market.category}
+              {isHousing ? formatHousingRoomType(housing.roomType) : market.category}
             </div>
 
             {photos.length > 0 && (
@@ -232,7 +252,7 @@ export default function ListingDetailModal({
             )}
 
             {isClosed && (
-              <div className="absolute right-5 bottom-5 rounded-full border border-rose-500/20 bg-rose-500/90 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
+              <div className="absolute bottom-5 right-5 rounded-full border border-rose-500/20 bg-rose-500/90 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
                 {status}
               </div>
             )}
@@ -292,6 +312,7 @@ export default function ListingDetailModal({
                 <span className="font-display text-3xl font-black tracking-tighter text-white">
                   {price.toLocaleString()}
                 </span>
+
                 {isHousing && (
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">
                     / month
@@ -349,25 +370,73 @@ export default function ListingDetailModal({
             )}
 
             {isHousing && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
-                    Deposit
-                  </p>
-                  <p className="mt-2 text-lg font-black text-white">
-                    ₹{housing.deposit.toLocaleString()}
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
+                      Deposit
+                    </p>
+                    <p className="mt-2 text-lg font-black text-white">
+                      ₹{housing.deposit.toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
+                      Maintenance
+                    </p>
+                    <p className="mt-2 text-lg font-black text-white">
+                      ₹{Number(housing.maintenance || 0).toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
+                      Furnishing
+                    </p>
+                    <p className="mt-2 text-sm font-black text-white">
+                      {housing.furnishing || "Unfurnished"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
+                      Available
+                    </p>
+                    <p className="mt-2 text-sm font-black text-white">
+                      {formatDateLabel(housing.availableFrom)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-white/5 bg-white/[0.04] p-5">
+                  <div className="mb-3 flex items-center gap-2 text-kjc-accent">
+                    <Users size={18} />
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em]">
+                      Preference
+                    </p>
+                  </div>
+
+                  <p className="text-sm font-bold text-white/75">
+                    {formatTenantPreference(housing.preferTenants)}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/30">
-                    Furnishing
-                  </p>
-                  <p className="mt-2 text-sm font-black text-white">
-                    {housing.furnishing || "Unfurnished"}
-                  </p>
-                </div>
-              </div>
+                {housing.restrictions && (
+                  <div className="rounded-[28px] border border-white/5 bg-white/[0.04] p-5">
+                    <div className="mb-3 flex items-center gap-2 text-kjc-accent">
+                      <CalendarDays size={18} />
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em]">
+                        Restrictions
+                      </p>
+                    </div>
+
+                    <p className="text-sm font-medium leading-relaxed text-white/70">
+                      {housing.restrictions}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="rounded-[28px] border border-amber-500/15 bg-amber-500/10 p-5">

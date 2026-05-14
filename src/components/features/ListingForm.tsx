@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
+  CalendarDays,
   Camera,
+  Check,
   ChevronRight,
   IndianRupee,
   Info,
@@ -11,9 +13,14 @@ import {
 } from "lucide-react";
 import {
   createHousingListing,
+  formatHousingRoomType,
+  formatTenantPreference,
+  HousingFurnishing,
   HousingListing,
+  HousingRoomType,
+  HousingTenantPreference,
   updateHousingListing,
-} from "../../services/housingService";
+} from "../../services/housingService.ts";
 import {
   createMarketListing,
   MarketListing,
@@ -33,15 +40,17 @@ interface ListingFormProps {
 
 interface ListingFormData {
   title: string;
-  roomType: "single" | "shared" | "1BHK" | "2BHK" | "PG";
+  roomType: HousingRoomType;
   category: "Furniture" | "Electronics" | "Books" | "Essentials" | "Other";
   rent: string;
   price: string;
   deposit: string;
   maintenance: string;
+  restrictions: string;
   reasonForSelling: string;
-  furnishing: "Unfurnished" | "Semi-furnished" | "Fully-furnished";
-  preferTenants: "Any" | "Bachelors" | "Girls Only" | "Boys Only";
+  furnishing: HousingFurnishing;
+  preferTenants: HousingTenantPreference;
+  availableFrom: string;
   isNegotiable: boolean;
   location: string;
   latitude: number | null;
@@ -58,17 +67,27 @@ interface ListingFormData {
   description: string;
 }
 
+type OptionItem<T extends string> = {
+  value: T;
+  label: string;
+  helper?: string;
+};
+
+const today = new Date().toISOString().slice(0, 10);
+
 const initialFormData: ListingFormData = {
   title: "",
-  roomType: "single",
+  roomType: "roommate",
   category: "Furniture",
   rent: "",
   price: "",
   deposit: "",
   maintenance: "",
+  restrictions: "",
   reasonForSelling: "",
   furnishing: "Unfurnished",
-  preferTenants: "Any",
+  preferTenants: "both",
+  availableFrom: today,
   isNegotiable: false,
   location: "",
   latitude: null,
@@ -84,6 +103,193 @@ const initialFormData: ListingFormData = {
   condition: "Good",
   description: "",
 };
+
+const housingRoomOptions: OptionItem<HousingRoomType>[] = [
+  {
+    value: "roommate",
+    label: "Roommate",
+    helper: "Looking for a shared room/flatmate",
+  },
+  {
+    value: "1RK",
+    label: "1RK",
+    helper: "Room + kitchen",
+  },
+  {
+    value: "1BHK",
+    label: "1BHK",
+    helper: "Bedroom, hall, kitchen",
+  },
+  {
+    value: "2BHK",
+    label: "2BHK",
+    helper: "Two bedroom flat",
+  },
+  {
+    value: "3BHK",
+    label: "3BHK",
+    helper: "Three bedroom flat",
+  },
+  {
+    value: "PG",
+    label: "PG",
+    helper: "Paying guest accommodation",
+  },
+];
+
+const tenantOptions: OptionItem<HousingTenantPreference>[] = [
+  {
+    value: "girls_only",
+    label: "Girls only",
+  },
+  {
+    value: "boys_only",
+    label: "Boys only",
+  },
+  {
+    value: "both",
+    label: "Both",
+  },
+  {
+    value: "couples",
+    label: "Couples allowed",
+  },
+];
+
+const furnishingOptions: OptionItem<HousingFurnishing>[] = [
+  {
+    value: "Unfurnished",
+    label: "Unfurnished",
+  },
+  {
+    value: "Semi-furnished",
+    label: "Semi-furnished",
+  },
+  {
+    value: "Fully-furnished",
+    label: "Fully-furnished",
+  },
+];
+
+const marketCategoryOptions: OptionItem<ListingFormData["category"]>[] = [
+  { value: "Furniture", label: "Furniture" },
+  { value: "Electronics", label: "Electronics" },
+  { value: "Books", label: "Books" },
+  { value: "Essentials", label: "Essentials" },
+  { value: "Other", label: "Other" },
+];
+
+const conditionOptions: OptionItem<ListingFormData["condition"]>[] = [
+  { value: "New", label: "New" },
+  { value: "Like New", label: "Like New" },
+  { value: "Good", label: "Good" },
+  { value: "Fair", label: "Fair" },
+];
+
+function OptionSheet<T extends string>({
+  title,
+  value,
+  options,
+  onChange,
+}: {
+  title: string;
+  value: T;
+  options: OptionItem<T>[];
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between rounded-[30px] border border-white/10 bg-white/[0.04] px-6 py-5 text-left transition-transform duration-150 ease-out hover:border-kjc-accent/30 active:scale-[0.98]"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-[11px] font-black uppercase tracking-[0.18em] text-white">
+            {selected?.label || "Select"}
+          </span>
+          {selected?.helper && (
+            <span className="mt-1 block truncate text-[10px] font-bold text-white/35">
+              {selected.helper}
+            </span>
+          )}
+        </span>
+
+        <ChevronRight size={17} className="rotate-90 text-white/35" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[220] flex items-end justify-center p-4 sm:items-center">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-black/80"
+            aria-label={`Close ${title}`}
+          />
+
+          <div className="relative w-full max-w-md rounded-t-[38px] border border-white/10 bg-black p-6 shadow-pro-lg sm:rounded-[38px]">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                  Select
+                </p>
+                <h3 className="mt-1 text-2xl pro-heading tracking-tighter">
+                  {title}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-white/45"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              {options.map((option) => {
+                const active = option.value === value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                    className={`flex items-center justify-between rounded-[26px] border px-5 py-4 text-left transition-transform duration-150 ease-out active:scale-[0.98] ${
+                      active
+                        ? "border-kjc-accent bg-kjc-accent/15 text-white"
+                        : "border-white/10 bg-white/[0.04] text-white/70"
+                    }`}
+                  >
+                    <span>
+                      <span className="block text-[11px] font-black uppercase tracking-[0.18em]">
+                        {option.label}
+                      </span>
+                      {option.helper && (
+                        <span className="mt-1 block text-[10px] font-bold text-white/35">
+                          {option.helper}
+                        </span>
+                      )}
+                    </span>
+
+                    {active && <Check size={18} className="text-kjc-accent" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function ListingForm({
   type,
@@ -125,12 +331,14 @@ export default function ListingForm({
         ...initialFormData,
         title: listing.title || "",
         description: listing.description || "",
-        roomType: listing.roomType || "single",
+        roomType: listing.roomType || "roommate",
         rent: listing.rent ? String(listing.rent) : "",
         deposit: listing.deposit ? String(listing.deposit) : "",
         maintenance: listing.maintenance ? String(listing.maintenance) : "",
+        restrictions: listing.restrictions || "",
         furnishing: listing.furnishing || "Unfurnished",
-        preferTenants: listing.preferTenants || "Any",
+        preferTenants: listing.preferTenants || "both",
+        availableFrom: listing.availableFrom || today,
         location: listing.location || "",
         latitude: listing.latitude ?? null,
         longitude: listing.longitude ?? null,
@@ -312,33 +520,28 @@ export default function ListingForm({
       let newPhotoURLs: string[] = [];
 
       if (selectedImages.length > 0) {
-        setUploadStatus(
-          `Compressing and uploading ${selectedImages.length} image${
-            selectedImages.length > 1 ? "s" : ""
-          }...`
-        );
-
         const folder = type === "housing" ? "housing" : "marketplace";
+
         newPhotoURLs = await uploadMultipleImages(selectedImages, folder, (progress) => {
-  if (progress.stage === "preparing") {
-    setUploadStatus("Preparing images...");
-    return;
-  }
+          if (progress.stage === "preparing") {
+            setUploadStatus("Preparing images...");
+            return;
+          }
 
-  if (progress.stage === "compressing") {
-    setUploadStatus(`Optimizing image ${progress.current}/${progress.total}...`);
-    return;
-  }
+          if (progress.stage === "compressing") {
+            setUploadStatus(`Optimizing image ${progress.current}/${progress.total}...`);
+            return;
+          }
 
-  if (progress.stage === "uploading") {
-    setUploadStatus(`Uploading image ${progress.current}/${progress.total}...`);
-    return;
-  }
+          if (progress.stage === "uploading") {
+            setUploadStatus(`Uploading image ${progress.current}/${progress.total}...`);
+            return;
+          }
 
-  if (progress.stage === "done") {
-    setUploadStatus(`Uploaded image ${progress.current}/${progress.total}`);
-  }
-});
+          if (progress.stage === "done") {
+            setUploadStatus(`Uploaded image ${progress.current}/${progress.total}`);
+          }
+        });
       }
 
       const photos = [...existingPhotos, ...newPhotoURLs];
@@ -356,8 +559,10 @@ export default function ListingForm({
           rent,
           deposit,
           maintenance: Number(formData.maintenance) || 0,
+          restrictions: formData.restrictions.trim(),
           furnishing: formData.furnishing,
           preferTenants: formData.preferTenants,
+          availableFrom: formData.availableFrom || today,
           location:
             formData.location ||
             formData.formattedAddress.split(",")[0]?.trim() ||
@@ -372,7 +577,6 @@ export default function ListingForm({
           travelDistanceMeters: formData.travelDistanceMeters,
           travelDistanceLabel: formData.travelDistanceLabel,
           travelDurationLabel: formData.travelDurationLabel,
-          availableFrom: "Immediately",
           genderPreference: "none" as const,
           amenities: [],
           photos,
@@ -435,11 +639,11 @@ export default function ListingForm({
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <div
-  className="absolute inset-0 bg-black/80"
-  onClick={() => {
-    if (!loading) onClose();
-  }}
-/>
+        className="absolute inset-0 bg-black/80"
+        onClick={() => {
+          if (!loading) onClose();
+        }}
+      />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
@@ -472,12 +676,12 @@ export default function ListingForm({
           </div>
 
           <button
-  type="button"
-  onClick={() => {
-    if (!loading) onClose();
-  }}
-  disabled={loading}
-            className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97]"
+            type="button"
+            onClick={() => {
+              if (!loading) onClose();
+            }}
+            disabled={loading}
+            className="flex h-14 w-14 items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-white/25 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97] disabled:opacity-40"
           >
             <X size={24} />
           </button>
@@ -514,7 +718,11 @@ export default function ListingForm({
               required
               value={formData.title}
               onChange={(event) => updateField("title", event.target.value)}
-              placeholder={type === "housing" ? "1BHK near Gate 1..." : "Study table, fridge, books..."}
+              placeholder={
+                type === "housing"
+                  ? "1RK near Gate 1, roommate needed..."
+                  : "Study table, fridge, books..."
+              }
               className="input-pro"
             />
           </div>
@@ -530,7 +738,7 @@ export default function ListingForm({
               onChange={(event) => updateField("description", event.target.value)}
               placeholder={
                 type === "housing"
-                  ? "Rent details, restrictions, amenities, move-in date..."
+                  ? "Rent details, amenities, nearby landmark, move-in terms..."
                   : "Condition, reason for sale, pickup location..."
               }
               rows={4}
@@ -544,42 +752,21 @@ export default function ListingForm({
                 {type === "housing" ? "Room type" : "Category"}
               </label>
 
-              <div className="relative">
-                <select
-                  value={type === "housing" ? formData.roomType : formData.category}
-                  onChange={(event) => {
-                    if (type === "housing") {
-                      updateField("roomType", event.target.value as ListingFormData["roomType"]);
-                    } else {
-                      updateField("category", event.target.value as ListingFormData["category"]);
-                    }
-                  }}
-                  className="input-pro appearance-none pr-12 text-[11px] font-black uppercase tracking-widest"
-                >
-                  {type === "housing" ? (
-                    <>
-                      <option value="single">Single</option>
-                      <option value="shared">Shared</option>
-                      <option value="1BHK">1BHK</option>
-                      <option value="2BHK">2BHK</option>
-                      <option value="PG">PG</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="Furniture">Furniture</option>
-                      <option value="Electronics">Electronics</option>
-                      <option value="Books">Books</option>
-                      <option value="Essentials">Essentials</option>
-                      <option value="Other">Other</option>
-                    </>
-                  )}
-                </select>
-
-                <ChevronRight
-                  size={16}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-white/30"
+              {type === "housing" ? (
+                <OptionSheet
+                  title="Room type"
+                  value={formData.roomType}
+                  options={housingRoomOptions}
+                  onChange={(value) => updateField("roomType", value)}
                 />
-              </div>
+              ) : (
+                <OptionSheet
+                  title="Category"
+                  value={formData.category}
+                  options={marketCategoryOptions}
+                  onChange={(value) => updateField("category", value)}
+                />
+              )}
             </div>
 
             <div className="space-y-4">
@@ -612,39 +799,122 @@ export default function ListingForm({
           </div>
 
           {type === "housing" && (
-            <div className="grid grid-cols-2 gap-5">
+            <>
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-4">
+                  <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                    Deposit
+                  </label>
+
+                  <input
+                    type="number"
+                    min={0}
+                    value={formData.deposit}
+                    onChange={(event) => updateField("deposit", event.target.value)}
+                    placeholder="Optional"
+                    className="input-pro"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                    Maintenance
+                  </label>
+
+                  <input
+                    type="number"
+                    min={0}
+                    value={formData.maintenance}
+                    onChange={(event) =>
+                      updateField("maintenance", event.target.value)
+                    }
+                    placeholder="Optional"
+                    className="input-pro"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-4">
+                  <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                    Furnishing
+                  </label>
+
+                  <OptionSheet
+                    title="Furnishing"
+                    value={formData.furnishing}
+                    options={furnishingOptions}
+                    onChange={(value) => updateField("furnishing", value)}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                    Preference
+                  </label>
+
+                  <OptionSheet
+                    title="Tenant preference"
+                    value={formData.preferTenants}
+                    options={tenantOptions}
+                    onChange={(value) => updateField("preferTenants", value)}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-4">
                 <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
-                  Deposit
+                  Available from
                 </label>
 
-                <input
-                  type="number"
-                  min={0}
-                  value={formData.deposit}
-                  onChange={(event) => updateField("deposit", event.target.value)}
-                  placeholder="Optional"
-                  className="input-pro"
+                <div className="relative">
+                  <CalendarDays
+                    size={17}
+                    className="absolute left-6 top-1/2 -translate-y-1/2 text-kjc-accent"
+                  />
+
+                  <input
+                    type="date"
+                    min={today}
+                    value={formData.availableFrom}
+                    onChange={(event) =>
+                      updateField("availableFrom", event.target.value)
+                    }
+                    className="input-pro pl-14"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                  Restrictions optional
+                </label>
+
+                <textarea
+                  value={formData.restrictions}
+                  onChange={(event) =>
+                    updateField("restrictions", event.target.value)
+                  }
+                  rows={3}
+                  placeholder="Example: No smoking, no loud parties, cooking allowed..."
+                  className="input-pro resize-none py-5 leading-relaxed"
                 />
               </div>
+            </>
+          )}
 
-              <div className="space-y-4">
-                <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
-                  Furnishing
-                </label>
+          {type === "market" && (
+            <div className="space-y-4">
+              <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+                Condition
+              </label>
 
-                <select
-                  value={formData.furnishing}
-                  onChange={(event) =>
-                    updateField("furnishing", event.target.value as ListingFormData["furnishing"])
-                  }
-                  className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
-                >
-                  <option value="Unfurnished">Unfurnished</option>
-                  <option value="Semi-furnished">Semi-furnished</option>
-                  <option value="Fully-furnished">Fully-furnished</option>
-                </select>
-              </div>
+              <OptionSheet
+                title="Condition"
+                value={formData.condition}
+                options={conditionOptions}
+                onChange={(value) => updateField("condition", value)}
+              />
             </div>
           )}
 
@@ -665,7 +935,7 @@ export default function ListingForm({
             {formData.travelDistanceLabel && (
               <div className="rounded-[24px] border border-kjc-accent/20 bg-kjc-accent/10 px-5 py-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.25em] text-kjc-accent">
-                  {formData.travelDistanceLabel}
+                  {formData.travelDistanceLabel} from KJU by road
                 </p>
 
                 {formData.travelDurationLabel && (

@@ -1,6 +1,6 @@
 import { Flag, X } from "lucide-react";
 import { useState } from "react";
-import { HousingListing } from "../../services/housingService";
+import { HousingListing } from "../../services/housingService.ts";
 import { MarketListing } from "../../services/marketService";
 import {
   createListingReport,
