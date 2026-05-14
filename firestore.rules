@@ -361,6 +361,35 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    match /app_issues/{issueId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid
+        && incoming().type in [
+          'login',
+          'posting',
+          'chat',
+          'map_location',
+          'profile',
+          'safety',
+          'other'
+        ]
+        && validString(incoming().message, 2000)
+        && incoming().status == 'open';
+
+      allow read, update, delete: if false;
+    }
+
+    match /app_feedback/{feedbackId} {
+      allow create: if signedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().rating is number
+        && incoming().rating >= 1
+        && incoming().rating <= 5
+        && optionalString(incoming().message, 2000);
+
+      allow read, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

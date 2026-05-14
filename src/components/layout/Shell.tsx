@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AppFeedbackModal from "../features/AppFeedbackModal";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
@@ -1319,6 +1320,8 @@ export default function Shell() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [profileGateOpen, setProfileGateOpen] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState<"issue" | "feedback" | null>(null);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
 
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
@@ -1849,6 +1852,32 @@ export default function Shell() {
                       {profile?.campusRole || "Student"}
                     </p>
 
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditProfileOpen(true)}
+                        className="rounded-[26px] border border-white/10 bg-white/5 px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 transition-transform duration-150 ease-out active:scale-[0.97]"
+                      >
+                        Edit profile
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFeedbackModal("feedback")}
+                        className="rounded-[26px] border border-white/10 bg-white/5 px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 transition-transform duration-150 ease-out active:scale-[0.97]"
+                      >
+                        Feedback
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackModal("issue")}
+                      className="mt-3 w-full rounded-[26px] border border-amber-500/20 bg-amber-500/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-amber-300 transition-transform duration-150 ease-out active:scale-[0.97]"
+                    >
+                      Report app issue
+                    </button>
+
                     {!profileCompleted && (
                       <button
                         type="button"
@@ -1907,6 +1936,21 @@ export default function Shell() {
             await runIntent(intent);
           }
         }}
+      />
+
+      <ProfileCompletionModal
+        isOpen={editProfileOpen}
+        canClose
+        onClose={() => setEditProfileOpen(false)}
+        onComplete={() => {
+          setEditProfileOpen(false);
+        }}
+      />
+
+      <AppFeedbackModal
+        isOpen={Boolean(feedbackModal)}
+        mode={feedbackModal || "feedback"}
+        onClose={() => setFeedbackModal(null)}
       />
 
       <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
