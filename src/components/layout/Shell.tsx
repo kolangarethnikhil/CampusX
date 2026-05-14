@@ -1023,43 +1023,76 @@ export default function Shell() {
   }, [activeTab, user?.uid]);
 
   const loadData = async () => {
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const blockedIds = user?.uid ? await getBlockedUserIds(user.uid) : [];
-      setBlockedUserIds(blockedIds);
+  try {
+    const blockedIds = user?.uid ? await getBlockedUserIds(user.uid) : [];
+    setBlockedUserIds(blockedIds);
 
-      const [housing, market] = await Promise.all([
-        getHousingListings(),
-        getMarketListings(),
+    const [housing, market] = await Promise.all([
+      getHousingListings(),
+      getMarketListings(),
+    ]);
+
+    const visibleHousing = housing.filter(
+      (listing) => !blockedIds.includes(listing.postedBy)
+    );
+
+    const visibleMarket = market.filter(
+      (listing) => !blockedIds.includes(listing.postedBy)
+    );
+
+    setHousingData(visibleHousing);
+    setMarketData(visibleMarket);
+
+    if (user?.uid) {
+      const ownedHousingFromAll = housing.filter(
+        (listing) => listing.postedBy === user.uid
+      );
+
+      const ownedMarketFromAll = market.filter(
+        (listing) => listing.postedBy === user.uid
+      );
+
+      const [myHousingFromQuery, myMarketFromQuery] = await Promise.all([
+        getMyHousingListings(user.uid),
+        getMyMarketListings(user.uid),
       ]);
 
-      setHousingData(
-        housing.filter((listing) => !blockedIds.includes(listing.postedBy))
-      );
+      const mergedHousing = [
+        ...myHousingFromQuery,
+        ...ownedHousingFromAll.filter(
+          (item) => !myHousingFromQuery.some((existing) => existing.id === item.id)
+        ),
+      ];
 
-      setMarketData(
-        market.filter((listing) => !blockedIds.includes(listing.postedBy))
-      );
+      const mergedMarket = [
+        ...myMarketFromQuery,
+        ...ownedMarketFromAll.filter(
+          (item) => !myMarketFromQuery.some((existing) => existing.id === item.id)
+        ),
+      ];
 
-      if (user?.uid) {
-        const [myHousing, myMarket] = await Promise.all([
-          getMyHousingListings(user.uid),
-          getMyMarketListings(user.uid),
-        ]);
+      setMyHousingData(mergedHousing);
+      setMyMarketData(mergedMarket);
 
-        setMyHousingData(myHousing);
-        setMyMarketData(myMarket);
-      } else {
-        setMyHousingData([]);
-        setMyMarketData([]);
-      }
-    } catch (error) {
-      console.error("Error loading data:", error);
-    } finally {
-      setLoading(false);
+      console.log("My posts loaded:", {
+        uid: user.uid,
+        housingQuery: myHousingFromQuery.length,
+        housingFallback: ownedHousingFromAll.length,
+        marketQuery: myMarketFromQuery.length,
+        marketFallback: ownedMarketFromAll.length,
+      });
+    } else {
+      setMyHousingData([]);
+      setMyMarketData([]);
     }
-  };
+  } catch (error) {
+    console.error("Error loading data:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const openUserProfile = async (uid: string) => {
     const snapshot = await getDoc(doc(db, "users", uid));
