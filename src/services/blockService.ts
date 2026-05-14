@@ -8,16 +8,40 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
+
 import { auth, db, handleFirestoreError, OperationType } from "../lib/firebase";
+
+const COLLECTION_NAME = "user_blocks";
 
 export interface UserBlock {
   id: string;
   blockerId: string;
   blockedUserId: string;
-  createdAt: any;
+  createdAt?: unknown;
 }
 
-const COLLECTION_NAME = "user_blocks";
+export async function getBlockedUserIds(userId?: string): Promise<string[]> {
+  const uid = userId || auth.currentUser?.uid;
+
+  if (!uid) return [];
+
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("blockerId", "==", uid)
+    );
+
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map((item) => item.data() as Omit<UserBlock, "id">)
+      .map((block) => block.blockedUserId)
+      .filter(Boolean);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
+    return [];
+  }
+}
 
 export async function blockUser(blockedUserId: string): Promise<string> {
   const currentUser = auth.currentUser;
@@ -31,10 +55,16 @@ export async function blockUser(blockedUserId: string): Promise<string> {
   }
 
   try {
-    const existing = await getBlockDoc(currentUser.uid, blockedUserId);
+    const existingBlocks = query(
+      collection(db, COLLECTION_NAME),
+      where("blockerId", "==", currentUser.uid),
+      where("blockedUserId", "==", blockedUserId)
+    );
 
-    if (existing) {
-      return existing.id;
+    const existingSnapshot = await getDocs(existingBlocks);
+
+    if (!existingSnapshot.empty) {
+      return existingSnapshot.docs[0].id;
     }
 
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
@@ -49,7 +79,7 @@ export async function blockUser(blockedUserId: string): Promise<string> {
   }
 }
 
-export async function unblockUser(blockedUserId: string): Promise<void> {
+export async function unblockUser(blockId: string): Promise<void> {
   const currentUser = auth.currentUser;
 
   if (!currentUser) {
@@ -57,59 +87,8 @@ export async function unblockUser(blockedUserId: string): Promise<void> {
   }
 
   try {
-    const existing = await getBlockDoc(currentUser.uid, blockedUserId);
-
-    if (!existing) return;
-
-    await deleteDoc(doc(db, COLLECTION_NAME, existing.id));
+    await deleteDoc(doc(db, COLLECTION_NAME, blockId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, COLLECTION_NAME);
   }
-}
-
-export async function getBlockedUserIds(userId: string): Promise<string[]> {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("blockerId", "==", userId)
-    );
-
-    const snapshot = await getDocs(q);
-
-    return snapshot.docs
-      .map((item) => item.data().blockedUserId)
-      .filter(Boolean) as string[];
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
-    return [];
-  }
-}
-
-export async function isUserBlocked(blockedUserId: string): Promise<boolean> {
-  const currentUser = auth.currentUser;
-
-  if (!currentUser) return false;
-
-  const existing = await getBlockDoc(currentUser.uid, blockedUserId);
-
-  return Boolean(existing);
-}
-
-async function getBlockDoc(blockerId: string, blockedUserId: string) {
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where("blockerId", "==", blockerId),
-    where("blockedUserId", "==", blockedUserId)
-  );
-
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) return null;
-
-  const first = snapshot.docs[0];
-
-  return {
-    id: first.id,
-    ...first.data(),
-  } as UserBlock;
 }
