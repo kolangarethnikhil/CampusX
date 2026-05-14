@@ -44,12 +44,14 @@ import {
   subscribeToConversations,
   subscribeToMessages,
 } from "../../services/chatService";
+import { blockUser, getBlockedUserIds } from "../../services/blockService";
 
 import ListingForm from "../features/ListingForm";
 import VerificationModal from "../features/VerificationModal";
 import ListingDetailModal from "../features/ListingDetailModal";
 import UserProfilePreview from "../features/UserProfilePreview";
 import HousingMapView from "../features/HousingMapView";
+import ReportListingModal from "../features/ReportListingModal";
 import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 
 type Tab = "home" | "search" | "inbox" | "me";
@@ -696,11 +698,13 @@ function Chattery({
   openConversationId,
   onConversationOpened,
   onOpenListing,
+  blockedUserIds = [],
 }: {
   onOpenUserProfile: (uid: string) => void;
   openConversationId?: string | null;
   onConversationOpened?: () => void;
   onOpenListing?: (conversation: Conversation) => void | Promise<void>;
+  blockedUserIds?: string[];
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
@@ -747,10 +751,18 @@ function Chattery({
     loadUsers();
   }, [conversations, user]);
 
+  const getOtherUserId = (conversation: Conversation) =>
+    conversation.participants.find((id) => id !== user?.uid);
+
+  const visibleConversations = conversations.filter((conversation) => {
+    const otherUserId = getOtherUserId(conversation);
+    return !otherUserId || !blockedUserIds.includes(otherUserId);
+  });
+
   useEffect(() => {
     if (!openConversationId) return;
 
-    const matchedConversation = conversations.find(
+    const matchedConversation = visibleConversations.find(
       (conversation) => conversation.id === openConversationId
     );
 
@@ -761,7 +773,7 @@ function Chattery({
     }
 
     onConversationOpened?.();
-  }, [conversations, openConversationId, onConversationOpened, selectedChat?.id]);
+  }, [visibleConversations, openConversationId, onConversationOpened, selectedChat?.id]);
 
   useEffect(() => {
     if (!selectedChat) return;
@@ -770,8 +782,15 @@ function Chattery({
     return unsubscribe;
   }, [selectedChat]);
 
-  const getOtherUserId = (conversation: Conversation) =>
-    conversation.participants.find((id) => id !== user?.uid);
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    const otherUserId = getOtherUserId(selectedChat);
+
+    if (otherUserId && blockedUserIds.includes(otherUserId)) {
+      setSelectedChat(null);
+    }
+  }, [blockedUserIds, selectedChat]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedChat) return;
@@ -913,13 +932,13 @@ function Chattery({
     <div className="space-y-10">
       <h2 className="text-4xl pro-heading tracking-tighter">Inbox</h2>
 
-      {conversations.length === 0 ? (
+      {visibleConversations.length === 0 ? (
         <div className="rounded-[48px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
           <h2 className="text-2xl pro-heading">No chats yet</h2>
         </div>
       ) : (
         <div className="grid gap-5">
-          {conversations.map((conversation) => {
+          {visibleConversations.map((conversation) => {
             const otherUserId = getOtherUserId(conversation);
             const otherUser = otherUserId ? userMap[otherUserId] : null;
             const name = otherUser?.displayName || "CampusX user";
@@ -978,6 +997,11 @@ export default function Shell() {
   const [marketData, setMarketData] = useState<MarketListing[]>([]);
   const [myHousingData, setMyHousingData] = useState<HousingListing[]>([]);
   const [myMarketData, setMyMarketData] = useState<MarketListing[]>([]);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [reportListing, setReportListing] =
+    useState<HousingListing | MarketListing | null>(null);
+  const [reportListingType, setReportListingType] =
+    useState<ListingType>("housing");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1002,9 +1026,21 @@ export default function Shell() {
     setLoading(true);
 
     try {
-      const [housing, market] = await Promise.all([getHousingListings(), getMarketListings()]);
-      setHousingData(housing);
-      setMarketData(market);
+      const blockedIds = user?.uid ? await getBlockedUserIds(user.uid) : [];
+      setBlockedUserIds(blockedIds);
+
+      const [housing, market] = await Promise.all([
+        getHousingListings(),
+        getMarketListings(),
+      ]);
+
+      setHousingData(
+        housing.filter((listing) => !blockedIds.includes(listing.postedBy))
+      );
+
+      setMarketData(
+        market.filter((listing) => !blockedIds.includes(listing.postedBy))
+      );
 
       if (user?.uid) {
         const [myHousing, myMarket] = await Promise.all([
@@ -1061,9 +1097,9 @@ export default function Shell() {
       }
 
       await openListingDetails(
-  { id: snapshot.id, ...snapshot.data() } as HousingListing | MarketListing,
-  conversation.listingType as ListingType
-);
+        { id: snapshot.id, ...snapshot.data() } as HousingListing | MarketListing,
+        conversation.listingType as ListingType
+      );
     } catch (error) {
       console.error(error);
       alert("Original post is no longer available.");
@@ -1168,6 +1204,65 @@ export default function Shell() {
     }
   };
 
+  const handleOpenReport = (
+    listing: HousingListing | MarketListing,
+    type: ListingType
+  ) => {
+    if (!user) {
+      signIn();
+      return;
+    }
+
+    if (listing.postedBy === user.uid) {
+      alert("You cannot report your own post.");
+      return;
+    }
+
+    setReportListing(listing);
+    setReportListingType(type);
+  };
+
+  const handleBlockUser = async (userIdToBlock: string) => {
+    if (!user) {
+      await signIn();
+      return;
+    }
+
+    if (user.uid === userIdToBlock) {
+      alert("You cannot block yourself.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Block this user? Their posts and chats will be hidden for you."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await blockUser(userIdToBlock);
+
+      setBlockedUserIds((prev) =>
+        prev.includes(userIdToBlock) ? prev : [...prev, userIdToBlock]
+      );
+
+      setHousingData((prev) =>
+        prev.filter((listing) => listing.postedBy !== userIdToBlock)
+      );
+
+      setMarketData((prev) =>
+        prev.filter((listing) => listing.postedBy !== userIdToBlock)
+      );
+
+      closeListingDetail();
+
+      alert("User blocked.");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not block user.");
+    }
+  };
+
   const handleContact = async (ownerId: string, listingId: string, title: string, type: string) => {
     if (!user) {
       await signIn();
@@ -1176,6 +1271,11 @@ export default function Shell() {
 
     if (ownerId === user.uid) {
       alert("This is your own post. Use Manage post to edit or close it.");
+      return;
+    }
+
+    if (blockedUserIds.includes(ownerId)) {
+      alert("You blocked this user. Unblock them before starting a chat.");
       return;
     }
 
@@ -1206,6 +1306,7 @@ export default function Shell() {
         type,
         listingMetadata
       );
+
       setChatToOpenId(conversationId);
       setSelectedListing(null);
       setActiveTab("inbox");
@@ -1279,6 +1380,7 @@ export default function Shell() {
                   openConversationId={chatToOpenId}
                   onConversationOpened={() => setChatToOpenId(null)}
                   onOpenListing={openOriginalListingFromConversation}
+                  blockedUserIds={blockedUserIds}
                 />
               ))}
 
@@ -1375,12 +1477,22 @@ export default function Shell() {
         onCloseListing={handleCloseListing}
         onReopenListing={handleReopenListing}
         onMarkSold={handleMarkSold}
+        onReport={handleOpenReport}
+        onBlockUser={handleBlockUser}
       />
 
       <UserProfilePreview
         isOpen={isUserPreviewOpen}
         onClose={() => setIsUserPreviewOpen(false)}
         user={selectedUserProfile}
+      />
+
+      <ReportListingModal
+        isOpen={Boolean(reportListing)}
+        listing={reportListing}
+        type={reportListingType}
+        currentUserId={user?.uid || null}
+        onClose={() => setReportListing(null)}
       />
 
       <VerificationModal

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  Ban,
   Edit3,
   ExternalLink,
+  Flag,
   Home,
   IndianRupee,
   MapPin,
   RotateCcw,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
@@ -51,6 +54,12 @@ interface ListingDetailModalProps {
     type: "housing" | "market"
   ) => void | Promise<void>;
   onMarkSold?: (listing: MarketListing) => void | Promise<void>;
+  isPosterBlocked?: boolean;
+  onReport?: (
+    listing: HousingListing | MarketListing,
+    type: "housing" | "market"
+  ) => void;
+  onBlockUser?: (userId: string) => void | Promise<void>;
 }
 
 export default function ListingDetailModal({
@@ -67,6 +76,9 @@ export default function ListingDetailModal({
   onCloseListing,
   onReopenListing,
   onMarkSold,
+  isPosterBlocked,
+  onReport,
+  onBlockUser,
 }: ListingDetailModalProps) {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -358,6 +370,20 @@ export default function ListingDetailModal({
               </div>
             )}
 
+            <div className="rounded-[28px] border border-amber-500/15 bg-amber-500/10 p-5">
+              <div className="mb-3 flex items-center gap-2 text-amber-300">
+                <ShieldAlert size={18} />
+                <p className="text-[10px] font-black uppercase tracking-[0.22em]">
+                  Safety note
+                </p>
+              </div>
+
+              <p className="text-[12px] font-bold leading-relaxed text-white/65">
+                Do not pay advance before visiting. Meet in person, verify the
+                room or item, and report suspicious listings.
+              </p>
+            </div>
+
             <button
               type="button"
               onClick={onOpenPoster}
@@ -455,16 +481,49 @@ export default function ListingDetailModal({
                 )}
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  onContact(listing.postedBy, listing.id, listing.title, type)
-                }
-                className="flex w-full items-center justify-center gap-3 rounded-[30px] bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black transition-transform duration-150 ease-out hover:bg-kjc-accent hover:text-white active:scale-[0.97]"
-              >
-                Ping owner
-                <Send size={16} />
-              </button>
+              <div className="grid gap-3">
+                {isPosterBlocked ? (
+                  <div className="rounded-[28px] border border-rose-500/20 bg-rose-500/10 p-5 text-center">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-rose-300">
+                      You blocked this user
+                    </p>
+                    <p className="mt-2 text-[11px] font-bold leading-relaxed text-white/40">
+                      This post will be hidden after refresh.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onContact(listing.postedBy, listing.id, listing.title, type)
+                    }
+                    className="flex w-full items-center justify-center gap-3 rounded-[30px] bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black transition-transform duration-150 ease-out hover:bg-kjc-accent hover:text-white active:scale-[0.97]"
+                  >
+                    Ping owner
+                    <Send size={16} />
+                  </button>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onReport?.(listing, type)}
+                    className="flex items-center justify-center gap-2 rounded-[24px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white/55 transition-transform duration-150 ease-out hover:text-white active:scale-[0.97]"
+                  >
+                    Report
+                    <Flag size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onBlockUser?.(listing.postedBy)}
+                    className="flex items-center justify-center gap-2 rounded-[24px] border border-rose-500/20 bg-rose-500/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-rose-300 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Block
+                    <Ban size={14} />
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

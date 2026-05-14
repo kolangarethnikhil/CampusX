@@ -23,67 +23,67 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-  allow get: if signedIn();
-  allow list: if false;
+      allow get: if signedIn();
+      allow list: if false;
 
-  function isKjcAuthEmail() {
-    return request.auth.token.email is string
-      && (
-        request.auth.token.email.lower().matches('.*@kristujayanti\\.com$') ||
-        request.auth.token.email.lower().matches('.*@kjc\\.edu\\.in$')
-      );
-  }
+      function isKjcAuthEmail() {
+        return request.auth.token.email is string
+          && (
+            request.auth.token.email.lower().matches('.*@kristujayanti\\.com$') ||
+            request.auth.token.email.lower().matches('.*@kjc\\.edu\\.in$')
+          );
+      }
 
-  allow create: if isOwner(userId)
-    && incoming().uid == request.auth.uid
-    && incoming().email == request.auth.token.email
-    && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
-    && (
-      (
-        isKjcAuthEmail()
-        && incoming().campusRole == 'Student'
-        && incoming().verifiedStatus == 'verified'
-        && incoming().collegeEmail == request.auth.token.email
-      )
-      ||
-      (
-        !isKjcAuthEmail()
-        && incoming().verifiedStatus in ['unverified', 'pending']
-      )
-    );
+      allow create: if isOwner(userId)
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
+        && (
+          (
+            isKjcAuthEmail()
+            && incoming().campusRole == 'Student'
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
+        );
 
-  allow update: if isOwner(userId)
-    && incoming().uid == existing().uid
-    && incoming().email == existing().email
-    && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
-    && incoming().diff(existing()).affectedKeys().hasOnly([
-      'displayName',
-      'photoURL',
-      'bio',
-      'course',
-      'batch',
-      'collegeEmail',
-      'campusRole',
-      'verifiedStatus',
-      'passedOutYear',
-      'currentLocation',
-      'updatedAt'
-    ])
-    && (
-      (
-        isKjcAuthEmail()
-        && incoming().verifiedStatus == 'verified'
-        && incoming().collegeEmail == request.auth.token.email
-      )
-      ||
-      (
-        !isKjcAuthEmail()
-        && incoming().verifiedStatus in ['unverified', 'pending']
-      )
-    );
+      allow update: if isOwner(userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().campusRole in ['Student', 'Alumni', 'Landlord', 'Seller']
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'photoURL',
+          'bio',
+          'course',
+          'batch',
+          'collegeEmail',
+          'campusRole',
+          'verifiedStatus',
+          'passedOutYear',
+          'currentLocation',
+          'updatedAt'
+        ])
+        && (
+          (
+            isKjcAuthEmail()
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
+        );
 
-  allow delete: if false;
-}
+      allow delete: if false;
+    }
 
     match /housing_listings/{listingId} {
       allow read: if true;
@@ -160,7 +160,7 @@ service cloud.firestore {
         && data.longitude is number
         && validString(data.formattedAddress, 500)
         && data.postedBy == request.auth.uid
-        && data.status in ['available', 'reserved', 'sold'];
+        && data.status in ['available', 'reserved', 'sold', 'closed'];
       }
     }
 
@@ -185,7 +185,10 @@ service cloud.firestore {
         && incoming().participants is list
         && request.auth.uid in incoming().participants
         && incoming().participants.size() >= 2
-        && incoming().participants.size() <= 10;
+        && incoming().participants.size() <= 10
+        && incoming().listingId is string
+        && incoming().listingTitle is string
+        && incoming().listingType in ['housing', 'market'];
 
       allow update: if signedIn()
         && request.auth.uid in existing().participants
@@ -208,6 +211,43 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+    }
+
+    match /listing_reports/{reportId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid
+        && incoming().listingOwnerId != request.auth.uid
+        && incoming().listingId is string
+        && incoming().listingType in ['housing', 'market']
+        && incoming().listingTitle is string
+        && incoming().listingOwnerId is string
+        && incoming().reason in [
+          'fake_listing',
+          'scam',
+          'wrong_location',
+          'already_unavailable',
+          'spam',
+          'unsafe',
+          'other'
+        ]
+        && incoming().status == 'open';
+
+      allow read, update, delete: if false;
+    }
+
+    match /user_blocks/{blockId} {
+      allow create: if signedIn()
+        && incoming().blockerId == request.auth.uid
+        && incoming().blockedUserId is string
+        && incoming().blockedUserId != request.auth.uid;
+
+      allow read: if signedIn()
+        && resource.data.blockerId == request.auth.uid;
+
+      allow delete: if signedIn()
+        && resource.data.blockerId == request.auth.uid;
+
+      allow update: if false;
     }
 
     match /reports/{reportId} {
