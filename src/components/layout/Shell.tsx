@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
@@ -57,6 +57,24 @@ import { getHousingLocationDisplay } from "../../utils/listingDisplay";
 type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
 
+type HousingFilters = {
+  roomType: "All" | "single" | "shared" | "1BHK" | "2BHK" | "PG";
+  maxRent: string;
+  maxDeposit: string;
+  maxDistanceKm: string;
+  furnishing: "All" | "Unfurnished" | "Semi-furnished" | "Fully-furnished";
+  availableOnly: boolean;
+};
+
+const initialHousingFilters: HousingFilters = {
+  roomType: "All",
+  maxRent: "",
+  maxDeposit: "",
+  maxDistanceKm: "",
+  furnishing: "All",
+  availableOnly: false,
+};
+
 type UserLite = {
   displayName: string;
   photoURL?: string;
@@ -66,6 +84,67 @@ type UserLite = {
   batch?: string;
   currentLocation?: string;
 };
+
+function getHousingFilterCount(filters: HousingFilters) {
+  let count = 0;
+
+  if (filters.roomType !== "All") count += 1;
+  if (filters.maxRent.trim()) count += 1;
+  if (filters.maxDeposit.trim()) count += 1;
+  if (filters.maxDistanceKm.trim()) count += 1;
+  if (filters.furnishing !== "All") count += 1;
+  if (filters.availableOnly) count += 1;
+
+  return count;
+}
+
+function applyHousingFilters(listings: HousingListing[], filters: HousingFilters) {
+  return listings.filter((listing) => {
+    if (filters.roomType !== "All" && listing.roomType !== filters.roomType) {
+      return false;
+    }
+
+    if (filters.availableOnly && listing.status !== "available") {
+      return false;
+    }
+
+    if (filters.furnishing !== "All" && listing.furnishing !== filters.furnishing) {
+      return false;
+    }
+
+    const maxRent = Number(filters.maxRent);
+    if (Number.isFinite(maxRent) && maxRent > 0 && listing.rent > maxRent) {
+      return false;
+    }
+
+    const maxDeposit = Number(filters.maxDeposit);
+    if (
+      filters.maxDeposit.trim() &&
+      Number.isFinite(maxDeposit) &&
+      maxDeposit >= 0 &&
+      listing.deposit > maxDeposit
+    ) {
+      return false;
+    }
+
+    const maxDistanceKm = Number(filters.maxDistanceKm);
+    const listingDistanceKm =
+      typeof listing.travelDistanceMeters === "number"
+        ? listing.travelDistanceMeters / 1000
+        : listing.distanceFromCollegeKm || 0;
+
+    if (
+      filters.maxDistanceKm.trim() &&
+      Number.isFinite(maxDistanceKm) &&
+      maxDistanceKm > 0 &&
+      listingDistanceKm > maxDistanceKm
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
 
 function BottomNav({
   activeTab,
@@ -124,11 +203,13 @@ function Header({
   onSearch,
   onFilterClick,
   showFilters,
+  activeFilterCount,
 }: {
   activeTab: Tab;
   onSearch: (value: string) => void;
   onFilterClick: () => void;
   showFilters: boolean;
+  activeFilterCount: number;
 }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchVal, setSearchVal] = useState("");
@@ -170,13 +251,21 @@ function Header({
                   type="button"
                   onClick={onFilterClick}
                   className={`rounded-2xl border p-3 transition-transform duration-150 ease-out active:scale-[0.97] ${
-                    showFilters
+                    showFilters || activeFilterCount > 0
                       ? "border-kjc-accent bg-kjc-accent text-white"
                       : "border-white/5 bg-white/5 text-white hover:bg-white/10"
                   }`}
                   aria-label="Filters"
                 >
-                  <Filter size={22} />
+                  <div className="relative">
+                    <Filter size={22} />
+
+                    {activeFilterCount > 0 && (
+                      <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[9px] font-black text-black">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </div>
                 </button>
               )}
             </div>
@@ -489,7 +578,7 @@ function RoomsPage({
           ) : listings.length === 0 ? (
             <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
-                No rooms yet
+                No rooms match this search
               </p>
             </div>
           ) : (
@@ -693,6 +782,214 @@ function CreateModal({
   );
 }
 
+function HousingFilterModal({
+  isOpen,
+  filters,
+  onChange,
+  onClose,
+  onClear,
+}: {
+  isOpen: boolean;
+  filters: HousingFilters;
+  onChange: (filters: HousingFilters) => void;
+  onClose: () => void;
+  onClear: () => void;
+}) {
+  const [draft, setDraft] = useState<HousingFilters>(filters);
+
+  useEffect(() => {
+    if (isOpen) setDraft(filters);
+  }, [filters, isOpen]);
+
+  if (!isOpen) return null;
+
+  const updateDraft = <K extends keyof HousingFilters>(
+    key: K,
+    value: HousingFilters[K]
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const apply = () => {
+    onChange(draft);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[130] flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close filters"
+        className="absolute inset-0 bg-black/80"
+      />
+
+      <div className="relative w-full max-w-lg rounded-t-[44px] border border-white/10 bg-black p-7 shadow-pro-lg sm:rounded-[44px]">
+        <div className="mb-7 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+              Housing filters
+            </p>
+            <h2 className="mt-2 text-3xl pro-heading tracking-tighter">
+              Find faster
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/5 text-white/45 transition-transform duration-150 ease-out active:scale-[0.97]"
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+              Room type
+            </label>
+
+            <select
+              value={draft.roomType}
+              onChange={(event) =>
+                updateDraft("roomType", event.target.value as HousingFilters["roomType"])
+              }
+              className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
+            >
+              <option value="All">All</option>
+              <option value="single">Single</option>
+              <option value="shared">Shared</option>
+              <option value="1BHK">1BHK</option>
+              <option value="2BHK">2BHK</option>
+              <option value="PG">PG</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+                Max rent
+              </label>
+
+              <input
+                type="number"
+                min={0}
+                value={draft.maxRent}
+                onChange={(event) => updateDraft("maxRent", event.target.value)}
+                placeholder="15000"
+                className="input-pro"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+                Max deposit
+              </label>
+
+              <input
+                type="number"
+                min={0}
+                value={draft.maxDeposit}
+                onChange={(event) => updateDraft("maxDeposit", event.target.value)}
+                placeholder="40000"
+                className="input-pro"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+              Max distance by road
+            </label>
+
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              value={draft.maxDistanceKm}
+              onChange={(event) => updateDraft("maxDistanceKm", event.target.value)}
+              placeholder="5"
+              className="input-pro"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
+              Furnishing
+            </label>
+
+            <select
+              value={draft.furnishing}
+              onChange={(event) =>
+                updateDraft("furnishing", event.target.value as HousingFilters["furnishing"])
+              }
+              className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
+            >
+              <option value="All">All</option>
+              <option value="Unfurnished">Unfurnished</option>
+              <option value="Semi-furnished">Semi-furnished</option>
+              <option value="Fully-furnished">Fully-furnished</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => updateDraft("availableOnly", !draft.availableOnly)}
+            className={`flex w-full items-center justify-between rounded-[28px] border px-5 py-5 text-left transition-transform duration-150 ease-out active:scale-[0.98] ${
+              draft.availableOnly
+                ? "border-emerald-500/20 bg-emerald-500/10"
+                : "border-white/10 bg-white/5"
+            }`}
+          >
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white">
+                Available only
+              </p>
+              <p className="mt-1 text-[11px] font-bold text-white/35">
+                Hide closed or reserved rooms
+              </p>
+            </div>
+
+            <span
+              className={`h-6 w-6 rounded-full border ${
+                draft.availableOnly
+                  ? "border-emerald-400 bg-emerald-400"
+                  : "border-white/20"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="mt-7 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(initialHousingFilters);
+              onClear();
+              onClose();
+            }}
+            className="rounded-[26px] border border-white/10 bg-white/5 py-5 text-[10px] font-black uppercase tracking-[0.24em] text-white/55 transition-transform duration-150 ease-out active:scale-[0.97]"
+          >
+            Clear
+          </button>
+
+          <button
+            type="button"
+            onClick={apply}
+            className="rounded-[26px] bg-white py-5 text-[10px] font-black uppercase tracking-[0.24em] text-black transition-transform duration-150 ease-out active:scale-[0.97]"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Chattery({
   onOpenUserProfile,
   openConversationId,
@@ -754,10 +1051,14 @@ function Chattery({
   const getOtherUserId = (conversation: Conversation) =>
     conversation.participants.find((id) => id !== user?.uid);
 
-  const visibleConversations = conversations.filter((conversation) => {
-    const otherUserId = getOtherUserId(conversation);
-    return !otherUserId || !blockedUserIds.includes(otherUserId);
-  });
+  const visibleConversations = useMemo(
+    () =>
+      conversations.filter((conversation) => {
+        const otherUserId = getOtherUserId(conversation);
+        return !otherUserId || !blockedUserIds.includes(otherUserId);
+      }),
+    [blockedUserIds, conversations, user?.uid]
+  );
 
   useEffect(() => {
     if (!openConversationId) return;
@@ -790,7 +1091,7 @@ function Chattery({
     if (otherUserId && blockedUserIds.includes(otherUserId)) {
       setSelectedChat(null);
     }
-  }, [blockedUserIds, selectedChat]);
+  }, [blockedUserIds, selectedChat, user?.uid]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedChat) return;
@@ -998,12 +1299,11 @@ export default function Shell() {
   const [myHousingData, setMyHousingData] = useState<HousingListing[]>([]);
   const [myMarketData, setMyMarketData] = useState<MarketListing[]>([]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
-  const [reportListing, setReportListing] =
-    useState<HousingListing | MarketListing | null>(null);
-  const [reportListingType, setReportListingType] =
-    useState<ListingType>("housing");
+  const [reportListing, setReportListing] = useState<HousingListing | MarketListing | null>(null);
+  const [reportListingType, setReportListingType] = useState<ListingType>("housing");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [housingFilters, setHousingFilters] = useState<HousingFilters>(initialHousingFilters);
   const [loading, setLoading] = useState(true);
 
   const [selectedListing, setSelectedListing] = useState<HousingListing | MarketListing | null>(null);
@@ -1023,76 +1323,68 @@ export default function Shell() {
   }, [activeTab, user?.uid]);
 
   const loadData = async () => {
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const blockedIds = user?.uid ? await getBlockedUserIds(user.uid) : [];
-    setBlockedUserIds(blockedIds);
+    try {
+      const blockedIds = user?.uid ? await getBlockedUserIds(user.uid) : [];
+      setBlockedUserIds(blockedIds);
 
-    const [housing, market] = await Promise.all([
-      getHousingListings(),
-      getMarketListings(),
-    ]);
-
-    const visibleHousing = housing.filter(
-      (listing) => !blockedIds.includes(listing.postedBy)
-    );
-
-    const visibleMarket = market.filter(
-      (listing) => !blockedIds.includes(listing.postedBy)
-    );
-
-    setHousingData(visibleHousing);
-    setMarketData(visibleMarket);
-
-    if (user?.uid) {
-      const ownedHousingFromAll = housing.filter(
-        (listing) => listing.postedBy === user.uid
-      );
-
-      const ownedMarketFromAll = market.filter(
-        (listing) => listing.postedBy === user.uid
-      );
-
-      const [myHousingFromQuery, myMarketFromQuery] = await Promise.all([
-        getMyHousingListings(user.uid),
-        getMyMarketListings(user.uid),
+      const [housing, market] = await Promise.all([
+        getHousingListings(),
+        getMarketListings(),
       ]);
 
-      const mergedHousing = [
-        ...myHousingFromQuery,
-        ...ownedHousingFromAll.filter(
-          (item) => !myHousingFromQuery.some((existing) => existing.id === item.id)
-        ),
-      ];
+      const visibleHousing = housing.filter(
+        (listing) => !blockedIds.includes(listing.postedBy)
+      );
 
-      const mergedMarket = [
-        ...myMarketFromQuery,
-        ...ownedMarketFromAll.filter(
-          (item) => !myMarketFromQuery.some((existing) => existing.id === item.id)
-        ),
-      ];
+      const visibleMarket = market.filter(
+        (listing) => !blockedIds.includes(listing.postedBy)
+      );
 
-      setMyHousingData(mergedHousing);
-      setMyMarketData(mergedMarket);
+      setHousingData(visibleHousing);
+      setMarketData(visibleMarket);
 
-      console.log("My posts loaded:", {
-        uid: user.uid,
-        housingQuery: myHousingFromQuery.length,
-        housingFallback: ownedHousingFromAll.length,
-        marketQuery: myMarketFromQuery.length,
-        marketFallback: ownedMarketFromAll.length,
-      });
-    } else {
-      setMyHousingData([]);
-      setMyMarketData([]);
+      if (user?.uid) {
+        const ownedHousingFromAll = housing.filter(
+          (listing) => listing.postedBy === user.uid
+        );
+
+        const ownedMarketFromAll = market.filter(
+          (listing) => listing.postedBy === user.uid
+        );
+
+        const [myHousingFromQuery, myMarketFromQuery] = await Promise.all([
+          getMyHousingListings(user.uid),
+          getMyMarketListings(user.uid),
+        ]);
+
+        const mergedHousing = [
+          ...myHousingFromQuery,
+          ...ownedHousingFromAll.filter(
+            (item) => !myHousingFromQuery.some((existing) => existing.id === item.id)
+          ),
+        ];
+
+        const mergedMarket = [
+          ...myMarketFromQuery,
+          ...ownedMarketFromAll.filter(
+            (item) => !myMarketFromQuery.some((existing) => existing.id === item.id)
+          ),
+        ];
+
+        setMyHousingData(mergedHousing);
+        setMyMarketData(mergedMarket);
+      } else {
+        setMyHousingData([]);
+        setMyMarketData([]);
+      }
+    } catch (error) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Error loading data:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const openUserProfile = async (uid: string) => {
     const snapshot = await getDoc(doc(db, "users", uid));
@@ -1361,6 +1653,13 @@ export default function Shell() {
     );
   };
 
+  const activeHousingFilterCount = getHousingFilterCount(housingFilters);
+
+  const filteredHousingData = applyHousingFilters(
+    filterBySearch(housingData),
+    housingFilters
+  );
+
   return (
     <div className="min-h-screen bg-black pb-32 text-white atmo-bg">
       <Header
@@ -1368,6 +1667,7 @@ export default function Shell() {
         onSearch={setSearchQuery}
         onFilterClick={() => setShowFilters((prev) => !prev)}
         showFilters={showFilters}
+        activeFilterCount={activeTab === "home" ? activeHousingFilterCount : 0}
       />
 
       <main className="mx-auto max-w-xl px-6 py-10">
@@ -1380,7 +1680,7 @@ export default function Shell() {
           >
             {activeTab === "home" && (
               <RoomsPage
-                listings={filterBySearch(housingData)}
+                listings={filteredHousingData}
                 loading={loading}
                 onContact={handleContact}
                 onOpenDetails={openListingDetails}
@@ -1480,6 +1780,14 @@ export default function Shell() {
         }}
       />
 
+      <HousingFilterModal
+        isOpen={showFilters && activeTab === "home"}
+        filters={housingFilters}
+        onChange={setHousingFilters}
+        onClear={() => setHousingFilters(initialHousingFilters)}
+        onClose={() => setShowFilters(false)}
+      />
+
       <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
 
       {editingListing && (
@@ -1494,47 +1802,36 @@ export default function Shell() {
         />
       )}
 
-      <ListingDetailModal
-        isOpen={Boolean(selectedListing)}
-        listing={selectedListing}
-        type={selectedListingType}
-        currentUserId={user?.uid || null}
-        onClose={closeListingDetail}
-        onContact={handleContact}
-        poster={selectedPoster}
-        onOpenPoster={() => {
-          if (selectedListing?.postedBy) openUserProfile(selectedListing.postedBy);
-        }}
-        onEdit={handleEditListing}
-        onDelete={handleDeleteListing}
-        onCloseListing={handleCloseListing}
-        onReopenListing={handleReopenListing}
-        onMarkSold={handleMarkSold}
-        isPosterBlocked={
-          selectedListing ? blockedUserIds.includes(selectedListing.postedBy) : false
-        }
-        onReport={handleOpenReport}
-        onBlockUser={handleBlockUser}
-      />
+     <ListingDetailModal
+  isOpen={Boolean(selectedListing)}
+  listing={selectedListing}
+  type={selectedListingType}
+  currentUserId={user?.uid || null}
+  onClose={closeListingDetail}
+  onContact={handleContact}
+  poster={selectedPoster}
+  onOpenPoster={() => {
+    if (selectedListing?.postedBy) {
+      openUserProfile(selectedListing.postedBy);
+    }
+  }}
+  onEdit={handleEditListing}
+  onDelete={handleDeleteListing}
+  onCloseListing={handleCloseListing}
+  onReopenListing={handleReopenListing}
+  onMarkSold={handleMarkSold}
+/> 
 
-      <UserProfilePreview
-        isOpen={isUserPreviewOpen}
-        onClose={() => setIsUserPreviewOpen(false)}
-        user={selectedUserProfile}
-      />
+<UserProfilePreview
+  isOpen={isUserPreviewOpen}
+  onClose={() => setIsUserPreviewOpen(false)}
+  user={selectedUserProfile}
+/>
 
-      <ReportListingModal
-        isOpen={Boolean(reportListing)}
-        listing={reportListing}
-        type={reportListingType}
-        currentUserId={user?.uid || null}
-        onClose={() => setReportListing(null)}
-      />
-
-      <VerificationModal
-        isOpen={verificationModalOpen}
-        onClose={() => setVerificationModalOpen(false)}
-      />
+<VerificationModal
+  isOpen={verificationModalOpen}
+  onClose={() => setVerificationModalOpen(false)}
+/>
     </div>
   );
-}
+} 
