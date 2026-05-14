@@ -49,7 +49,15 @@ export async function uploadMultipleImages(
       total,
     });
 
-    return uploadImage(preparedFile, folder);
+    const url = await uploadImage(preparedFile, folder);
+
+onProgress?.({
+  stage: "done",
+  current: index + 1,
+  total,
+});
+
+return url;
   });
 }
 

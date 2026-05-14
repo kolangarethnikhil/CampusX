@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import admin from "firebase-admin";
 import sharp from "sharp";
 import WebSocket from "ws";
+import crypto from "crypto";
 
 const BUCKET = "campusx-images";
 const MAX_INPUT_SIZE = 5 * 1024 * 1024;
@@ -29,7 +30,7 @@ function getFirebaseAdmin() {
   });
 }
 
-function getSupabaseAdmin() {
+function getSupabaseAdmin(): SupabaseClient {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -49,15 +50,15 @@ function getSupabaseAdmin() {
 
 async function readRequestBuffer(req: VercelRequest): Promise<Buffer> {
   const chunks: Buffer[] = [];
-
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
-
   return Buffer.concat(chunks);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const startedAt = Date.now();
+
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -109,8 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         withoutEnlargement: true,
       })
       .webp({
-        quality: 74,
-        effort: 5,
+        quality: 72,
+        effort: 3,
       })
       .toBuffer();
 
@@ -138,6 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publicUrl: data.publicUrl,
       originalBytes: inputBuffer.length,
       compressedBytes: outputBuffer.length,
+      processingMs: Date.now() - startedAt,
       contentType: "image/webp",
     });
   } catch (error) {
@@ -148,3 +150,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
+
+

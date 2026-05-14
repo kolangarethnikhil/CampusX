@@ -326,19 +326,24 @@ export default function ListingForm({
   }
 
   if (progress.stage === "compressing") {
-    setUploadStatus(`Preparing image ${progress.current}/${progress.total}...`);
+    setUploadStatus(`Optimizing image ${progress.current}/${progress.total}...`);
     return;
   }
 
   if (progress.stage === "uploading") {
     setUploadStatus(`Uploading image ${progress.current}/${progress.total}...`);
+    return;
+  }
+
+  if (progress.stage === "done") {
+    setUploadStatus(`Uploaded image ${progress.current}/${progress.total}`);
   }
 });
       }
 
       const photos = [...existingPhotos, ...newPhotoURLs];
 
-      setUploadStatus(isEditing ? "Saving changes..." : "Posting listing...");
+      setUploadStatus(isEditing ? "Saving changes..." : "Saving listing...");
 
       if (type === "housing") {
         const rent = Number(formData.rent);
