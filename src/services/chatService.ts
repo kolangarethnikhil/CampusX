@@ -21,10 +21,10 @@ export interface ListingSnapshot {
   id: string;
   type: ListingType;
   title: string;
-  price?: number | null;
-  photo?: string | null;
-  location?: string | null;
-  statusAtStart?: string | null;
+  price?: number;
+  photo?: string;
+  location?: string;
+  statusAtStart?: string;
   roomType?: string;
   category?: string;
   createdAt?: unknown;
@@ -95,12 +95,13 @@ function getParticipantsKey(participants: string[]) {
 
 async function notifyReceiver(conversationId: string, message: string) {
   const user = auth.currentUser;
+
   if (!user) return;
 
   try {
     const token = await user.getIdToken();
 
-    await fetch("/api/notify-message", {
+    const response = await fetch("/api/notify-message", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -111,6 +112,11 @@ async function notifyReceiver(conversationId: string, message: string) {
         message,
       }),
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("notifyReceiver failed:", text);
+    }
   } catch (error) {
     console.error("notifyReceiver failed:", error);
   }
@@ -157,24 +163,18 @@ export async function startConversation(
     const normalizedListingType: ListingType =
       listingType === "housing" ? "housing" : "market";
 
-    const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
+    const listingSnapshot: ListingSnapshot = {
       id: listingId,
       type: normalizedListingType,
       title: listingTitle,
-      price: metadata?.listingPrice ?? null,
-      photo: metadata?.listingPhoto ?? null,
-      location: metadata?.listingLocation ?? null,
-      statusAtStart: metadata?.listingStatus ?? null,
-      createdAt: serverTimestamp(),
+      ...(typeof metadata?.listingPrice === "number"
+        ? { price: metadata.listingPrice }
+        : {}),
+      ...(metadata?.listingPhoto ? { photo: metadata.listingPhoto } : {}),
+      ...(metadata?.listingLocation ? { location: metadata.listingLocation } : {}),
+      ...(metadata?.listingStatus ? { statusAtStart: metadata.listingStatus } : {}),
     };
-    console.log("CampusX conversation create payload", {
-  participants,
-  participantsKey,
-  listingId,
-  listingTitle,
-  listingType: normalizedListingType,
-  listingSnapshot,
-});
+
     await setDoc(conversationRef, {
       participants,
       participantsKey,
@@ -185,10 +185,10 @@ export async function startConversation(
 
       listingSnapshot,
 
-      listingPhoto: metadata?.listingPhoto || listingSnapshot.photo || "",
-      listingPrice: metadata?.listingPrice || listingSnapshot.price || 0,
-      listingStatus: metadata?.listingStatus || listingSnapshot.statusAtStart || "",
-      listingLocation: metadata?.listingLocation || listingSnapshot.location || "",
+      listingPhoto: metadata?.listingPhoto || "",
+      listingPrice: metadata?.listingPrice || 0,
+      listingStatus: metadata?.listingStatus || "",
+      listingLocation: metadata?.listingLocation || "",
 
       lastMessage: "",
       lastMessageSenderId: "",
@@ -302,6 +302,7 @@ export async function sendMessage(
 
 export async function markConversationDelivered(conversationId: string) {
   const currentUserId = auth.currentUser?.uid;
+
   if (!currentUserId) return;
 
   try {
@@ -316,6 +317,7 @@ export async function markConversationDelivered(conversationId: string) {
 
 export async function markConversationSeen(conversationId: string) {
   const currentUserId = auth.currentUser?.uid;
+
   if (!currentUserId) return;
 
   try {
@@ -355,6 +357,7 @@ export function getMessageVisualStatus(
   if (message.senderId !== currentUserId) return "seen";
 
   const otherUserId = conversation.participants.find((id) => id !== currentUserId);
+
   if (!otherUserId) return "sent";
 
   if (conversation.lastReadAtBy?.[otherUserId]) return "seen";
