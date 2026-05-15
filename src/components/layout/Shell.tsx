@@ -1399,8 +1399,13 @@ export default function Shell() {
         (listing) => !blockedIds.includes(listing.postedBy)
       );
 
-      setHousingData(visibleHousing);
-      setMarketData(visibleMarket);
+      setHousingData(
+  visibleHousing.filter((listing) => listing.postedBy !== user?.uid)
+);
+
+setMarketData(
+  visibleMarket.filter((listing) => listing.postedBy !== user?.uid)
+);
 
       if (user?.uid) {
         const ownedHousingFromAll = housing.filter(
