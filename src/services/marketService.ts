@@ -1,44 +1,99 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 
+export type MarketCategory =
+  | "Furniture"
+  | "Electronics"
+  | "Books"
+  | "Essentials"
+  | "Other";
+
+export type MarketCondition = "New" | "Like New" | "Good" | "Fair";
+
+export type MarketStatus =
+  | "available"
+  | "reserved"
+  | "sold"
+  | "closed"
+  | "expired"
+  | "deleted";
+
+export type ListingDurationDays = 15 | 30;
+
 export interface MarketListing {
   id: string;
   title: string;
-  category: "Furniture" | "Electronics" | "Books" | "Essentials" | "Other";
+  description: string;
+  category: MarketCategory;
   price: number;
+  condition?: MarketCondition;
   isNegotiable?: boolean;
-  condition: "New" | "Like New" | "Good" | "Fair";
   reasonForSelling?: string;
-  photos: string[];
-  postedBy: string;
-  status: "available" | "reserved" | "sold" | "closed";
+
   latitude?: number;
   longitude?: number;
   formattedAddress?: string;
-  description?: string;
+
+  photos: string[];
+  postedBy: string;
+  status: MarketStatus;
+
+  durationDays?: ListingDurationDays;
+  expiresAt?: any;
+  expiredAt?: any;
+  deletedAt?: any;
+  renewedAt?: any;
+
+  photoCleanupDueAt?: any;
+  photosDeletedAt?: any;
+  photosRetained?: boolean;
+
+  viewsCount?: number;
+  uniqueViewersCount?: number;
+  chatStartedCount?: number;
+  lastViewedAt?: any;
+  lastChatStartedAt?: any;
+
   createdAt: any;
   updatedAt?: any;
 }
 
 const COLLECTION_NAME = "marketplace_listings";
+const PHOTO_CLEANUP_GRACE_DAYS = 7;
 
-export async function getMarketListings(category?: string) {
+function getFutureTimestamp(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return Timestamp.fromDate(date);
+}
+
+function getExpiryTimestamp(durationDays: ListingDurationDays) {
+  return getFutureTimestamp(durationDays);
+}
+
+function getPhotoCleanupDueTimestamp() {
+  return getFutureTimestamp(PHOTO_CLEANUP_GRACE_DAYS);
+}
+
+export async function getMarketListings(filters?: {
+  category?: string;
+}) {
   try {
     let q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
 
-    if (category && category !== "All") {
-      q = query(q, where("category", "==", category));
+    if (filters?.category && filters.category !== "All") {
+      q = query(q, where("category", "==", filters.category));
     }
 
     const snapshot = await getDocs(q);
@@ -83,8 +138,19 @@ export async function createMarketListing(
   listing: Omit<MarketListing, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
   try {
+    const durationDays = listing.durationDays || 30;
+
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...listing,
+      status: listing.status || "available",
+      durationDays,
+      expiresAt: listing.expiresAt || getExpiryTimestamp(durationDays),
+      photoCleanupDueAt: null,
+      photosDeletedAt: null,
+      photosRetained: true,
+      viewsCount: listing.viewsCount ?? 0,
+      uniqueViewersCount: listing.uniqueViewersCount ?? 0,
+      chatStartedCount: listing.chatStartedCount ?? 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -115,22 +181,59 @@ export async function closeMarketListing(listingId: string): Promise<void> {
   });
 }
 
-export async function markMarketListingSold(listingId: string): Promise<void> {
-  return updateMarketListing(listingId, {
-    status: "sold",
-  });
-}
-
 export async function reopenMarketListing(listingId: string): Promise<void> {
   return updateMarketListing(listingId, {
     status: "available",
   });
 }
 
+export async function reserveMarketListing(listingId: string): Promise<void> {
+  return updateMarketListing(listingId, {
+    status: "reserved",
+  });
+}
+
+export async function markMarketListingSold(listingId: string): Promise<void> {
+  return updateMarketListing(listingId, {
+    status: "sold",
+    photoCleanupDueAt: getPhotoCleanupDueTimestamp(),
+  });
+}
+
+export async function expireMarketListing(listingId: string): Promise<void> {
+  return updateMarketListing(listingId, {
+    status: "expired",
+    expiredAt: serverTimestamp() as any,
+    photoCleanupDueAt: getPhotoCleanupDueTimestamp(),
+  });
+}
+
+export async function renewMarketListing(
+  listingId: string,
+  durationDays: ListingDurationDays
+): Promise<void> {
+  return updateMarketListing(listingId, {
+    status: "available",
+    durationDays,
+    expiresAt: getExpiryTimestamp(durationDays),
+    renewedAt: serverTimestamp() as any,
+    photoCleanupDueAt: null,
+    photosRetained: true,
+  });
+}
+
 export async function deleteMarketListing(listingId: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, COLLECTION_NAME, listingId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, COLLECTION_NAME);
-  }
+  return updateMarketListing(listingId, {
+    status: "deleted",
+    deletedAt: serverTimestamp() as any,
+    photoCleanupDueAt: getPhotoCleanupDueTimestamp(),
+  });
+}
+
+export async function markMarketPhotosDeleted(listingId: string): Promise<void> {
+  return updateMarketListing(listingId, {
+    photos: [],
+    photosDeletedAt: serverTimestamp() as any,
+    photosRetained: false,
+  });
 }

@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import AppFeedbackModal from "../features/AppFeedbackModal";
-import InstallAppPrompt from "../features/InstallAppPrompt";
-import { usePwaInstall } from "../../hooks/usePwaInstall";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeft,
   Bookmark,
+  Eye,
   Filter,
   Home,
   MapPin,
   MessageSquare,
   Plus,
+  RefreshCcw,
   Search,
   Send,
   ShoppingBag,
@@ -30,6 +29,7 @@ import {
   HousingFurnishing,
   HousingListing,
   HousingRoomType,
+  renewHousingListing,
   reopenHousingListing,
 } from "../../services/housingService";
 import {
@@ -39,27 +39,11 @@ import {
   getMyMarketListings,
   markMarketListingSold,
   MarketListing,
+  renewMarketListing,
   reopenMarketListing,
 } from "../../services/marketService";
-import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
-import {
-  Conversation,
-  Message,
-  sendMessage,
-  startConversation,
-  subscribeToConversations,
-  subscribeToMessages,
-} from "../../services/chatService";
-import { blockUser, getBlockedUserIds } from "../../services/blockService";
-
-import ListingForm from "../features/ListingForm";
-import VerificationModal from "../features/VerificationModal";
-import ListingDetailModal from "../features/ListingDetailModal";
-import UserProfilePreview from "../features/UserProfilePreview";
-import HousingMapView from "../features/HousingMapView";
-import ReportListingModal from "../features/ReportListingModal";
 import ProfileCompletionModal from "../features/ProfileCompletionModal";
-import { getHousingLocationDisplay } from "../../utils/listingDisplay";
+import AppFeedbackModal from "../features/AppFeedbackModal";
 
 type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
@@ -71,6 +55,16 @@ type HousingFilters = {
   maxDistanceKm: string;
   furnishing: "All" | HousingFurnishing;
   availableOnly: boolean;
+};
+
+type UserLite = {
+  displayName: string;
+  photoURL?: string;
+  campusRole?: string;
+  verifiedStatus?: string;
+  course?: string;
+  batch?: string;
+  currentLocation?: string;
 };
 
 type PendingIntent =
@@ -88,6 +82,11 @@ type PendingIntent =
       listingType: ListingType;
     };
 
+type OptionItem<T extends string> = {
+  value: T;
+  label: string;
+};
+
 const initialHousingFilters: HousingFilters = {
   roomType: "All",
   maxRent: "",
@@ -97,15 +96,22 @@ const initialHousingFilters: HousingFilters = {
   availableOnly: false,
 };
 
-type UserLite = {
-  displayName: string;
-  photoURL?: string;
-  campusRole?: string;
-  verifiedStatus?: string;
-  course?: string;
-  batch?: string;
-  currentLocation?: string;
-};
+const roomTypeOptions: OptionItem<HousingFilters["roomType"]>[] = [
+  { value: "All", label: "All" },
+  { value: "roommate", label: "Roommate" },
+  { value: "1RK", label: "1RK" },
+  { value: "1BHK", label: "1BHK" },
+  { value: "2BHK", label: "2BHK" },
+  { value: "3BHK", label: "3BHK" },
+  { value: "PG", label: "PG" },
+];
+
+const furnishingOptions: OptionItem<HousingFilters["furnishing"]>[] = [
+  { value: "All", label: "All" },
+  { value: "Unfurnished", label: "Unfurnished" },
+  { value: "Semi-furnished", label: "Semi-furnished" },
+  { value: "Fully-furnished", label: "Fully-furnished" },
+];
 
 function getHousingFilterCount(filters: HousingFilters) {
   let count = 0;
@@ -122,22 +128,12 @@ function getHousingFilterCount(filters: HousingFilters) {
 
 function applyHousingFilters(listings: HousingListing[], filters: HousingFilters) {
   return listings.filter((listing) => {
-    if (filters.roomType !== "All" && listing.roomType !== filters.roomType) {
-      return false;
-    }
-
-    if (filters.availableOnly && listing.status !== "available") {
-      return false;
-    }
-
-    if (filters.furnishing !== "All" && listing.furnishing !== filters.furnishing) {
-      return false;
-    }
+    if (filters.roomType !== "All" && listing.roomType !== filters.roomType) return false;
+    if (filters.availableOnly && listing.status !== "available") return false;
+    if (filters.furnishing !== "All" && listing.furnishing !== filters.furnishing) return false;
 
     const maxRent = Number(filters.maxRent);
-    if (Number.isFinite(maxRent) && maxRent > 0 && listing.rent > maxRent) {
-      return false;
-    }
+    if (Number.isFinite(maxRent) && maxRent > 0 && listing.rent > maxRent) return false;
 
     const maxDeposit = Number(filters.maxDeposit);
     if (
@@ -166,6 +162,90 @@ function applyHousingFilters(listings: HousingListing[], filters: HousingFilters
 
     return true;
   });
+}
+
+function DarkOptionPicker<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: OptionItem<T>[];
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between rounded-[28px] border border-white/10 bg-white/[0.04] px-5 py-5 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+      >
+        <span className="text-[11px] font-black uppercase tracking-[0.22em] text-white/70">
+          {selected?.label || "Select"}
+        </span>
+        <span className="text-white/30">⌄</span>
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[240] flex items-end justify-center p-4 sm:items-center">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-black/85"
+            aria-label={`Close ${label}`}
+          />
+
+          <div className="relative w-full max-w-md rounded-t-[38px] border border-white/10 bg-black p-6 shadow-pro-lg sm:rounded-[38px]">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+                  Filter
+                </p>
+                <h3 className="mt-1 text-2xl pro-heading tracking-tighter">{label}</h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-white/45"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="grid gap-3">
+              {options.map((option) => {
+                const active = option.value === value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
+                    className={`rounded-[26px] border px-5 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] transition-transform duration-150 ease-out active:scale-[0.98] ${
+                      active
+                        ? "border-kjc-accent bg-kjc-accent/15 text-white"
+                        : "border-white/10 bg-white/[0.04] text-white/60"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 function BottomNav({
@@ -336,11 +416,15 @@ function ListingCard({
   type,
   onContact,
   onOpenDetails,
+  showOwnerStats,
+  onRenew,
 }: {
   listing: HousingListing | MarketListing;
   type: ListingType;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  showOwnerStats?: boolean;
+  onRenew?: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
 }) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
@@ -352,6 +436,9 @@ function ListingCard({
   const marketListing = listing as MarketListing;
   const price = isHousing ? housingListing.rent : marketListing.price;
   const photoCount = listing.photos?.length || 0;
+  const expired = listing.status === "expired" || isListingExpired((listing as any).expiresAt);
+  const deleted = listing.status === "deleted";
+  const expiryLabel = getListingExpiryLabel((listing as any).expiresAt);
 
   useEffect(() => {
     let active = true;
@@ -444,6 +531,12 @@ function ListingCard({
                 Your post
               </span>
             )}
+
+            {(expired || deleted) && (
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/90 px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-black">
+                {deleted ? "Deleted" : "Expired"}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -453,7 +546,7 @@ function ListingCard({
               </span>
             )}
 
-            {!isOwner && (
+            {!isOwner && !deleted && (
               <button
                 type="button"
                 onClick={handleToggleSave}
@@ -513,23 +606,64 @@ function ListingCard({
           >
             {listing.status}
           </span>
+
+          {expiryLabel && (
+            <span className="rounded-xl border border-white/5 bg-white/[0.035] px-4 py-2 text-[9px] font-black uppercase tracking-[0.15em] text-white/50">
+              {expiryLabel}
+            </span>
+          )}
         </div>
 
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            if (isOwner) {
-              onOpenDetails(listing, type);
-              return;
-            }
-            onContact(listing.postedBy, listing.id, listing.title, type);
-          }}
-          className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-pro transition-transform duration-150 ease-out hover:bg-kjc-accent hover:text-white active:scale-[0.97]"
-        >
-          {isOwner ? "Manage post" : "Ping owner"}
-          <Send size={16} />
-        </button>
+        {showOwnerStats && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-center gap-2 rounded-[22px] border border-white/5 bg-white/[0.035] px-4 py-4 text-white/65">
+              <Eye size={15} className="text-kjc-accent" />
+              <span className="text-[10px] font-black uppercase tracking-[0.18em]">
+                {Number((listing as any).uniqueViewersCount || 0)} views
+              </span>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 rounded-[22px] border border-white/5 bg-white/[0.035] px-4 py-4 text-white/65">
+              <MessageSquare size={15} className="text-kjc-accent" />
+              <span className="text-[10px] font-black uppercase tracking-[0.18em]">
+                {Number((listing as any).chatStartedCount || 0)} chats
+              </span>
+            </div>
+          </div>
+        )}
+
+        {showOwnerStats && expired && !deleted ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void onRenew?.(listing, type);
+            }}
+            className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-kjc-accent/20 bg-kjc-accent/10 py-5 text-[10px] font-black uppercase tracking-[0.28em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
+          >
+            Renew post
+            <RefreshCcw size={16} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+
+              if (isOwner) {
+                onOpenDetails(listing, type);
+                return;
+              }
+
+              onContact(listing.postedBy, listing.id, listing.title, type);
+            }}
+            disabled={deleted}
+            className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/5 bg-white py-5 text-[10px] font-black uppercase tracking-[0.28em] text-black shadow-pro transition-transform duration-150 ease-out hover:bg-kjc-accent hover:text-white active:scale-[0.97] disabled:opacity-40"
+          >
+            {isOwner ? "Manage post" : "Ping owner"}
+            <Send size={16} />
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -680,12 +814,14 @@ function MyPostsPage({
   loading,
   onContact,
   onOpenDetails,
+  onRenew,
 }: {
   housing: HousingListing[];
   market: MarketListing[];
   loading: boolean;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  onRenew: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
 }) {
   const total = housing.length + market.length;
 
@@ -694,7 +830,7 @@ function MyPostsPage({
       <div>
         <h3 className="text-3xl pro-heading tracking-tighter">My posts</h3>
         <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
-          Manage your rooms and marketplace listings
+          Manage listings, renew expired posts, and track progress
         </p>
       </div>
 
@@ -715,6 +851,8 @@ function MyPostsPage({
               type="housing"
               onContact={onContact}
               onOpenDetails={onOpenDetails}
+              showOwnerStats
+              onRenew={onRenew}
             />
           ))}
 
@@ -725,6 +863,8 @@ function MyPostsPage({
               type="market"
               onContact={onContact}
               onOpenDetails={onOpenDetails}
+              showOwnerStats
+              onRenew={onRenew}
             />
           ))}
         </div>
@@ -876,22 +1016,12 @@ function HousingFilterModal({
             <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
               Room type
             </label>
-
-            <select
+            <DarkOptionPicker
+              label="Room type"
               value={draft.roomType}
-              onChange={(event) =>
-                updateDraft("roomType", event.target.value as HousingFilters["roomType"])
-              }
-              className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
-            >
-              <option value="All">All</option>
-              <option value="roommate">Roommate</option>
-              <option value="1RK">1RK</option>
-              <option value="1BHK">1BHK</option>
-              <option value="2BHK">2BHK</option>
-              <option value="3BHK">3BHK</option>
-              <option value="PG">PG</option>
-            </select>
+              options={roomTypeOptions}
+              onChange={(value) => updateDraft("roomType", value)}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -946,19 +1076,12 @@ function HousingFilterModal({
             <label className="pl-3 text-[10px] font-black uppercase tracking-[0.28em] text-white/30">
               Furnishing
             </label>
-
-            <select
+            <DarkOptionPicker
+              label="Furnishing"
               value={draft.furnishing}
-              onChange={(event) =>
-                updateDraft("furnishing", event.target.value as HousingFilters["furnishing"])
-              }
-              className="input-pro appearance-none text-[11px] font-black uppercase tracking-widest"
-            >
-              <option value="All">All</option>
-              <option value="Unfurnished">Unfurnished</option>
-              <option value="Semi-furnished">Semi-furnished</option>
-              <option value="Fully-furnished">Fully-furnished</option>
-            </select>
+              options={furnishingOptions}
+              onChange={(value) => updateDraft("furnishing", value)}
+            />
           </div>
 
           <button
@@ -1038,14 +1161,16 @@ function Chattery({
   useEffect(() => {
     const unsubscribe = subscribeToConversations(setConversations);
     return unsubscribe;
-  }, [user]);
+  }, [user?.uid]);
 
   useEffect(() => {
     async function loadUsers() {
       if (!user || conversations.length === 0) return;
 
       const ids = conversations
-        .map((conversation) => conversation.participants.find((id) => id !== user.uid))
+        .map((conversation) =>
+          conversation.participants.find((id) => id !== user.uid)
+        )
         .filter(Boolean) as string[];
 
       const uniqueIds = [...new Set(ids)];
@@ -1099,14 +1224,22 @@ function Chattery({
     }
 
     onConversationOpened?.();
-  }, [visibleConversations, openConversationId, onConversationOpened, selectedChat?.id]);
+  }, [
+    visibleConversations,
+    openConversationId,
+    onConversationOpened,
+    selectedChat?.id,
+  ]);
 
   useEffect(() => {
     if (!selectedChat) return;
 
     const unsubscribe = subscribeToMessages(selectedChat.id, setMessages);
+    void markConversationDelivered(selectedChat.id);
+    void markConversationSeen(selectedChat.id);
+
     return unsubscribe;
-  }, [selectedChat]);
+  }, [selectedChat?.id]);
 
   useEffect(() => {
     if (!selectedChat) return;
@@ -1129,12 +1262,11 @@ function Chattery({
     const otherUserId = getOtherUserId(selectedChat);
     const otherUser = otherUserId ? userMap[otherUserId] : null;
     const name = otherUser?.displayName || "CampusX user";
+    const snapshot = getConversationListingSnapshot(selectedChat);
     const listingPrice =
-      typeof selectedChat.listingPrice === "number"
-        ? selectedChat.listingPrice.toLocaleString()
+      typeof snapshot.price === "number" && snapshot.price > 0
+        ? snapshot.price.toLocaleString()
         : "";
-    const listingContextLocation = selectedChat.listingLocation?.trim() || "";
-    const listingContextStatus = selectedChat.listingStatus?.trim() || "";
 
     return (
       <div className="fixed inset-0 z-[120] flex flex-col bg-black">
@@ -1150,9 +1282,9 @@ function Chattery({
           <button
             type="button"
             onClick={() => otherUserId && onOpenUserProfile(otherUserId)}
-            className="flex items-center gap-3 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+            className="flex min-w-0 items-center gap-3 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
           >
-            <div className="h-11 w-11 overflow-hidden rounded-2xl bg-white/5">
+            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-white/5">
               {otherUser?.photoURL ? (
                 <img src={otherUser.photoURL} alt={name} className="h-full w-full object-cover" />
               ) : (
@@ -1162,10 +1294,10 @@ function Chattery({
               )}
             </div>
 
-            <div>
-              <h3 className="text-xl pro-heading">{name}</h3>
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
-                Regarding: {selectedChat.listingTitle}
+            <div className="min-w-0">
+              <h3 className="truncate text-xl pro-heading">{name}</h3>
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
+                Regarding: {snapshot.title}
               </p>
             </div>
           </button>
@@ -1178,10 +1310,10 @@ function Chattery({
             className="flex w-full items-center gap-4 rounded-[26px] border border-white/5 bg-white/5 p-4 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5">
-              {selectedChat.listingPhoto ? (
+              {snapshot.photo ? (
                 <img
-                  src={selectedChat.listingPhoto}
-                  alt={selectedChat.listingTitle}
+                  src={snapshot.photo}
+                  alt={snapshot.title}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -1194,7 +1326,7 @@ function Chattery({
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <h4 className="truncate text-sm font-semibold text-white">
-                  {selectedChat.listingTitle}
+                  {snapshot.title}
                 </h4>
 
                 {listingPrice && (
@@ -1205,7 +1337,7 @@ function Chattery({
               </div>
 
               <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
-                {listingContextStatus || listingContextLocation || "Listing details"}
+                {snapshot.status || snapshot.location || "Listing details"}
               </p>
 
               <p className="mt-1 text-[10px] font-black uppercase tracking-[0.16em] text-kjc-accent">
@@ -1218,6 +1350,11 @@ function Chattery({
         <div className="flex-1 space-y-7 overflow-y-auto p-6">
           {messages.map((message) => {
             const isMe = message.senderId === user?.uid;
+            const visualStatus = getMessageVisualStatus(
+              message,
+              selectedChat,
+              user?.uid
+            );
 
             return (
               <div key={message.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
@@ -1226,7 +1363,13 @@ function Chattery({
                     isMe ? "bg-kjc-accent text-white" : "bg-white/5 text-white/85"
                   }`}
                 >
-                  {message.content}
+                  <p>{message.content}</p>
+
+                  {isMe && (
+                    <div className="mt-2 flex justify-end">
+                      <MessageStatusDots status={visualStatus} />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1270,6 +1413,7 @@ function Chattery({
             const otherUserId = getOtherUserId(conversation);
             const otherUser = otherUserId ? userMap[otherUserId] : null;
             const name = otherUser?.displayName || "CampusX user";
+            const snapshot = getConversationListingSnapshot(conversation);
 
             return (
               <div
@@ -1288,7 +1432,7 @@ function Chattery({
                     event.stopPropagation();
                     if (otherUserId) onOpenUserProfile(otherUserId);
                   }}
-                  className="h-14 w-14 overflow-hidden rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
                 >
                   {otherUser?.photoURL ? (
                     <img src={otherUser.photoURL} alt={name} className="h-full w-full object-cover" />
@@ -1302,7 +1446,7 @@ function Chattery({
                 <div className="min-w-0 flex-1">
                   <h4 className="truncate text-xl pro-heading">{name}</h4>
                   <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
-                    Regarding: {conversation.listingTitle}
+                    Regarding: {snapshot.title}
                   </p>
                   <p className="mt-1 truncate text-[11px] font-bold text-white/45">
                     {conversation.lastMessage || "Start chatting..."}
@@ -1322,9 +1466,8 @@ export default function Shell() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [profileGateOpen, setProfileGateOpen] = useState(false);
-  const [feedbackModal, setFeedbackModal] = useState<"issue" | "feedback" | null>(null);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [installPromptOpen, setInstallPromptOpen] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState<"issue" | "feedback" | null>(null);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
 
   const [housingData, setHousingData] = useState<HousingListing[]>([]);
@@ -1350,7 +1493,6 @@ export default function Shell() {
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
   const { user, profile, profileCompleted, signIn, logout } = useAuth();
-  const pwaInstall = usePwaInstall();
 
   useEffect(() => {
     void loadData();
@@ -1369,16 +1511,6 @@ export default function Shell() {
     void runIntent(intent);
   }, [pendingIntent, user?.uid, profile?.profileCompleted, profileCompleted]);
 
-  useEffect(() => {
-    if (!user || !profileCompleted || !pwaInstall.canPrompt) return;
-
-    const timer = window.setTimeout(() => {
-      setInstallPromptOpen(true);
-    }, 1200);
-
-    return () => window.clearTimeout(timer);
-  }, [user?.uid, profileCompleted, pwaInstall.canPrompt]);
-
   const loadData = async () => {
     setLoading(true);
 
@@ -1392,29 +1524,25 @@ export default function Shell() {
       ]);
 
       const visibleHousing = housing.filter(
-        (listing) => !blockedIds.includes(listing.postedBy)
+        (listing) =>
+          !blockedIds.includes(listing.postedBy) &&
+          isPublicListingVisible(listing) &&
+          listing.postedBy !== user?.uid
       );
 
       const visibleMarket = market.filter(
-        (listing) => !blockedIds.includes(listing.postedBy)
+        (listing) =>
+          !blockedIds.includes(listing.postedBy) &&
+          isPublicListingVisible(listing) &&
+          listing.postedBy !== user?.uid
       );
 
-      setHousingData(
-  visibleHousing.filter((listing) => listing.postedBy !== user?.uid)
-);
-
-setMarketData(
-  visibleMarket.filter((listing) => listing.postedBy !== user?.uid)
-);
+      setHousingData(visibleHousing);
+      setMarketData(visibleMarket);
 
       if (user?.uid) {
-        const ownedHousingFromAll = housing.filter(
-          (listing) => listing.postedBy === user.uid
-        );
-
-        const ownedMarketFromAll = market.filter(
-          (listing) => listing.postedBy === user.uid
-        );
+        const ownedHousingFromAll = housing.filter((listing) => listing.postedBy === user.uid);
+        const ownedMarketFromAll = market.filter((listing) => listing.postedBy === user.uid);
 
         const [myHousingFromQuery, myMarketFromQuery] = await Promise.all([
           getMyHousingListings(user.uid),
@@ -1460,6 +1588,14 @@ setMarketData(
 
     const snapshot = await getDoc(doc(db, "users", listing.postedBy));
     setSelectedPoster((snapshot.data() as UserLite) || null);
+
+    if (user?.uid && listing.postedBy !== user.uid) {
+      await trackListingView({
+        listingId: listing.id,
+        listingType: type,
+        listingOwnerId: listing.postedBy,
+      });
+    }
   };
 
   const openOriginalListingFromConversation = async (conversation: Conversation) => {
@@ -1515,7 +1651,7 @@ setMarketData(
       return;
     }
 
-    const confirmed = window.confirm("Delete this post permanently? This cannot be undone.");
+    const confirmed = window.confirm("Delete this post? It will be hidden from public feed.");
     if (!confirmed) return;
 
     try {
@@ -1575,6 +1711,34 @@ setMarketData(
     }
   };
 
+  const handleRenewListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
+    if (!user || listing.postedBy !== user.uid) {
+      alert("You can only renew your own post.");
+      return;
+    }
+
+    const choice = window.prompt("Renew for how many days? Type 15 or 30", "30");
+    const duration = Number(choice);
+
+    if (duration !== 15 && duration !== 30) {
+      alert("Please enter 15 or 30.");
+      return;
+    }
+
+    try {
+      if (type === "housing") {
+        await renewHousingListing(listing.id, duration);
+      } else {
+        await renewMarketListing(listing.id, duration);
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Could not renew post");
+    }
+  };
+
   const handleMarkSold = async (listing: MarketListing) => {
     if (!user || listing.postedBy !== user.uid) {
       alert("You can only update your own post.");
@@ -1591,10 +1755,7 @@ setMarketData(
     }
   };
 
-  const openReportFlow = (
-    listing: HousingListing | MarketListing,
-    type: ListingType
-  ) => {
+  const openReportFlow = (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user) return;
 
     if (listing.postedBy === user.uid) {
@@ -1652,6 +1813,12 @@ setMarketData(
         listingMetadata
       );
 
+      await trackChatStarted({
+        listingId,
+        listingType: type === "housing" ? "housing" : "market",
+        listingOwnerId: ownerId,
+      });
+
       setChatToOpenId(conversationId);
       setSelectedListing(null);
       setActiveTab("inbox");
@@ -1698,10 +1865,7 @@ setMarketData(
     await runIntent(intent);
   };
 
-  const handleOpenReport = (
-    listing: HousingListing | MarketListing,
-    type: ListingType
-  ) => {
+  const handleOpenReport = (listing: HousingListing | MarketListing, type: ListingType) => {
     void requireProfileReady({
       kind: "report",
       listing,
@@ -1733,13 +1897,8 @@ setMarketData(
         prev.includes(userIdToBlock) ? prev : [...prev, userIdToBlock]
       );
 
-      setHousingData((prev) =>
-        prev.filter((listing) => listing.postedBy !== userIdToBlock)
-      );
-
-      setMarketData((prev) =>
-        prev.filter((listing) => listing.postedBy !== userIdToBlock)
-      );
+      setHousingData((prev) => prev.filter((listing) => listing.postedBy !== userIdToBlock));
+      setMarketData((prev) => prev.filter((listing) => listing.postedBy !== userIdToBlock));
 
       closeListingDetail();
 
@@ -1865,7 +2024,9 @@ setMarketData(
                       )}
                     </div>
 
-                    <h2 className="text-4xl pro-heading">{profile?.displayName || "CampusX User"}</h2>
+                    <h2 className="text-4xl pro-heading">
+                      {profile?.displayName || "CampusX User"}
+                    </h2>
 
                     <p className="mt-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">
                       {profile?.campusRole || "Student"}
@@ -1897,21 +2058,11 @@ setMarketData(
                       Report app issue
                     </button>
 
-                    {pwaInstall.canPrompt && (
-                      <button
-                        type="button"
-                        onClick={() => setInstallPromptOpen(true)}
-                        className="mt-3 w-full rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
-                      >
-                        Install CampusX app
-                      </button>
-                    )}
-
                     {!profileCompleted && (
                       <button
                         type="button"
                         onClick={() => setProfileGateOpen(true)}
-                        className="mt-6 rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent"
+                        className="mt-3 w-full rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent"
                       >
                         Complete profile
                       </button>
@@ -1924,6 +2075,7 @@ setMarketData(
                     loading={loading}
                     onContact={handleContact}
                     onOpenDetails={openListingDetails}
+                    onRenew={handleRenewListing}
                   />
 
                   <button
@@ -1971,9 +2123,7 @@ setMarketData(
         isOpen={editProfileOpen}
         canClose
         onClose={() => setEditProfileOpen(false)}
-        onComplete={() => {
-          setEditProfileOpen(false);
-        }}
+        onComplete={() => setEditProfileOpen(false)}
       />
 
       <AppFeedbackModal
@@ -1982,7 +2132,11 @@ setMarketData(
         onClose={() => setFeedbackModal(null)}
       />
 
-      <CreateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onRefresh={loadData} />
+      <CreateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onRefresh={loadData}
+      />
 
       {editingListing && (
         <ListingForm
@@ -2039,15 +2193,38 @@ setMarketData(
         isOpen={verificationModalOpen}
         onClose={() => setVerificationModalOpen(false)}
       />
-
-      <InstallAppPrompt
-        isOpen={installPromptOpen}
-        onClose={() => {
-          pwaInstall.dismiss();
-          setInstallPromptOpen(false);
-        }}
-        onInstall={pwaInstall.install}
-      />
     </div>
   );
 }
+import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
+import {
+  Conversation,
+  Message,
+  getConversationListingSnapshot,
+  getMessageVisualStatus,
+  markConversationDelivered,
+  markConversationSeen,
+  sendMessage,
+  startConversation,
+  subscribeToConversations,
+  subscribeToMessages,
+} from "../../services/chatService";
+import MessageStatusDots from "../features/MessageStatusDots";
+import { blockUser, getBlockedUserIds } from "../../services/blockService";
+import { getHousingLocationDisplay } from "../../utils/listingDisplay";
+import {
+  getListingExpiryLabel,
+  isListingExpired,
+  isPublicListingVisible,
+} from "../../utils/listingLifecycle";
+import {
+  trackChatStarted,
+  trackListingView,
+} from "../../services/listingViewsService";
+
+import ListingForm from "../features/ListingForm";
+import VerificationModal from "../features/VerificationModal";
+import ListingDetailModal from "../features/ListingDetailModal";
+import UserProfilePreview from "../features/UserProfilePreview";
+import HousingMapView from "../features/HousingMapView";
+import ReportListingModal from "../features/ReportListingModal";

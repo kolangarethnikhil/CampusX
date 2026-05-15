@@ -1,18 +1,16 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-
-const COLLECTION_NAME = "housing_listings";
 
 export type HousingRoomType =
   | "roommate"
@@ -33,6 +31,15 @@ export type HousingFurnishing =
   | "Semi-furnished"
   | "Fully-furnished";
 
+export type HousingStatus =
+  | "available"
+  | "reserved"
+  | "closed"
+  | "expired"
+  | "deleted";
+
+export type ListingDurationDays = 15 | 30;
+
 export interface HousingListing {
   id: string;
   title: string;
@@ -52,7 +59,7 @@ export interface HousingListing {
   amenities: string[];
   photos: string[];
   postedBy: string;
-  status: "available" | "reserved" | "closed";
+  status: HousingStatus;
 
   latitude?: number;
   longitude?: number;
@@ -65,9 +72,42 @@ export interface HousingListing {
   travelDistanceLabel?: string;
   travelDurationLabel?: string;
 
+  durationDays?: ListingDurationDays;
+  expiresAt?: any;
+  expiredAt?: any;
+  deletedAt?: any;
+  renewedAt?: any;
+
+  photoCleanupDueAt?: any;
+  photosDeletedAt?: any;
+  photosRetained?: boolean;
+
+  viewsCount?: number;
+  uniqueViewersCount?: number;
+  chatStartedCount?: number;
+  lastViewedAt?: any;
+  lastChatStartedAt?: any;
+
   description?: string;
   createdAt: any;
   updatedAt?: any;
+}
+
+const COLLECTION_NAME = "housing_listings";
+const PHOTO_CLEANUP_GRACE_DAYS = 7;
+
+function getFutureTimestamp(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return Timestamp.fromDate(date);
+}
+
+function getExpiryTimestamp(durationDays: ListingDurationDays) {
+  return getFutureTimestamp(durationDays);
+}
+
+function getPhotoCleanupDueTimestamp() {
+  return getFutureTimestamp(PHOTO_CLEANUP_GRACE_DAYS);
 }
 
 export async function getHousingListings(filters?: {
@@ -123,8 +163,19 @@ export async function createHousingListing(
   listing: Omit<HousingListing, "id" | "createdAt" | "updatedAt">
 ): Promise<string> {
   try {
+    const durationDays = listing.durationDays || 30;
+
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...listing,
+      status: listing.status || "available",
+      durationDays,
+      expiresAt: listing.expiresAt || getExpiryTimestamp(durationDays),
+      photoCleanupDueAt: null,
+      photosDeletedAt: null,
+      photosRetained: true,
+      viewsCount: listing.viewsCount ?? 0,
+      uniqueViewersCount: listing.uniqueViewersCount ?? 0,
+      chatStartedCount: listing.chatStartedCount ?? 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -161,12 +212,48 @@ export async function reopenHousingListing(listingId: string): Promise<void> {
   });
 }
 
+export async function reserveHousingListing(listingId: string): Promise<void> {
+  return updateHousingListing(listingId, {
+    status: "reserved",
+  });
+}
+
+export async function expireHousingListing(listingId: string): Promise<void> {
+  return updateHousingListing(listingId, {
+    status: "expired",
+    expiredAt: serverTimestamp() as any,
+    photoCleanupDueAt: getPhotoCleanupDueTimestamp(),
+  });
+}
+
+export async function renewHousingListing(
+  listingId: string,
+  durationDays: ListingDurationDays
+): Promise<void> {
+  return updateHousingListing(listingId, {
+    status: "available",
+    durationDays,
+    expiresAt: getExpiryTimestamp(durationDays),
+    renewedAt: serverTimestamp() as any,
+    photoCleanupDueAt: null,
+    photosRetained: true,
+  });
+}
+
 export async function deleteHousingListing(listingId: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, COLLECTION_NAME, listingId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, COLLECTION_NAME);
-  }
+  return updateHousingListing(listingId, {
+    status: "deleted",
+    deletedAt: serverTimestamp() as any,
+    photoCleanupDueAt: getPhotoCleanupDueTimestamp(),
+  });
+}
+
+export async function markHousingPhotosDeleted(listingId: string): Promise<void> {
+  return updateHousingListing(listingId, {
+    photos: [],
+    photosDeletedAt: serverTimestamp() as any,
+    photosRetained: false,
+  });
 }
 
 export function formatHousingRoomType(roomType?: HousingRoomType | string) {

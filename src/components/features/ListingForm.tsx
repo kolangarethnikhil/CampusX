@@ -13,14 +13,13 @@ import {
 } from "lucide-react";
 import {
   createHousingListing,
-  formatHousingRoomType,
-  formatTenantPreference,
   HousingFurnishing,
   HousingListing,
   HousingRoomType,
   HousingTenantPreference,
+  ListingDurationDays,
   updateHousingListing,
-} from "../../services/housingService.ts";
+} from "../../services/housingService";
 import {
   createMarketListing,
   MarketListing,
@@ -51,6 +50,7 @@ interface ListingFormData {
   furnishing: HousingFurnishing;
   preferTenants: HousingTenantPreference;
   availableFrom: string;
+  durationDays: ListingDurationDays;
   isNegotiable: boolean;
   location: string;
   latitude: number | null;
@@ -88,6 +88,7 @@ const initialFormData: ListingFormData = {
   furnishing: "Unfurnished",
   preferTenants: "both",
   availableFrom: today,
+  durationDays: 30,
   isNegotiable: false,
   location: "",
   latitude: null,
@@ -105,70 +106,25 @@ const initialFormData: ListingFormData = {
 };
 
 const housingRoomOptions: OptionItem<HousingRoomType>[] = [
-  {
-    value: "roommate",
-    label: "Roommate",
-    helper: "Looking for a shared room/flatmate",
-  },
-  {
-    value: "1RK",
-    label: "1RK",
-    helper: "Room + kitchen",
-  },
-  {
-    value: "1BHK",
-    label: "1BHK",
-    helper: "Bedroom, hall, kitchen",
-  },
-  {
-    value: "2BHK",
-    label: "2BHK",
-    helper: "Two bedroom flat",
-  },
-  {
-    value: "3BHK",
-    label: "3BHK",
-    helper: "Three bedroom flat",
-  },
-  {
-    value: "PG",
-    label: "PG",
-    helper: "Paying guest accommodation",
-  },
+  { value: "roommate", label: "Roommate", helper: "Shared room / flatmate" },
+  { value: "1RK", label: "1RK", helper: "Room + kitchen" },
+  { value: "1BHK", label: "1BHK", helper: "Bedroom, hall, kitchen" },
+  { value: "2BHK", label: "2BHK", helper: "Two bedroom flat" },
+  { value: "3BHK", label: "3BHK", helper: "Three bedroom flat" },
+  { value: "PG", label: "PG", helper: "Paying guest accommodation" },
 ];
 
 const tenantOptions: OptionItem<HousingTenantPreference>[] = [
-  {
-    value: "girls_only",
-    label: "Girls only",
-  },
-  {
-    value: "boys_only",
-    label: "Boys only",
-  },
-  {
-    value: "both",
-    label: "Both",
-  },
-  {
-    value: "couples",
-    label: "Couples allowed",
-  },
+  { value: "girls_only", label: "Girls only" },
+  { value: "boys_only", label: "Boys only" },
+  { value: "both", label: "Both" },
+  { value: "couples", label: "Couples allowed" },
 ];
 
 const furnishingOptions: OptionItem<HousingFurnishing>[] = [
-  {
-    value: "Unfurnished",
-    label: "Unfurnished",
-  },
-  {
-    value: "Semi-furnished",
-    label: "Semi-furnished",
-  },
-  {
-    value: "Fully-furnished",
-    label: "Fully-furnished",
-  },
+  { value: "Unfurnished", label: "Unfurnished" },
+  { value: "Semi-furnished", label: "Semi-furnished" },
+  { value: "Fully-furnished", label: "Fully-furnished" },
 ];
 
 const marketCategoryOptions: OptionItem<ListingFormData["category"]>[] = [
@@ -185,6 +141,12 @@ const conditionOptions: OptionItem<ListingFormData["condition"]>[] = [
   { value: "Good", label: "Good" },
   { value: "Fair", label: "Fair" },
 ];
+
+function removeUndefined<T extends Record<string, unknown>>(data: T) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as T;
+}
 
 function OptionSheet<T extends string>({
   title,
@@ -211,6 +173,7 @@ function OptionSheet<T extends string>({
           <span className="block truncate text-[11px] font-black uppercase tracking-[0.18em] text-white">
             {selected?.label || "Select"}
           </span>
+
           {selected?.helper && (
             <span className="mt-1 block truncate text-[10px] font-bold text-white/35">
               {selected.helper}
@@ -222,7 +185,7 @@ function OptionSheet<T extends string>({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[220] flex items-end justify-center p-4 sm:items-center">
+        <div className="fixed inset-0 z-[240] flex items-end justify-center p-4 sm:items-center">
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -272,6 +235,7 @@ function OptionSheet<T extends string>({
                       <span className="block text-[11px] font-black uppercase tracking-[0.18em]">
                         {option.label}
                       </span>
+
                       {option.helper && (
                         <span className="mt-1 block text-[10px] font-bold text-white/35">
                           {option.helper}
@@ -339,6 +303,7 @@ export default function ListingForm({
         furnishing: listing.furnishing || "Unfurnished",
         preferTenants: listing.preferTenants || "both",
         availableFrom: listing.availableFrom || today,
+        durationDays: listing.durationDays || 30,
         location: listing.location || "",
         latitude: listing.latitude ?? null,
         longitude: listing.longitude ?? null,
@@ -371,6 +336,7 @@ export default function ListingForm({
         isNegotiable: Boolean(listing.isNegotiable),
         reasonForSelling: listing.reasonForSelling || "",
         condition: listing.condition || "Good",
+        durationDays: listing.durationDays || 30,
         latitude: listing.latitude ?? null,
         longitude: listing.longitude ?? null,
         formattedAddress: listing.formattedAddress || "",
@@ -506,6 +472,7 @@ export default function ListingForm({
     event.preventDefault();
 
     const validationError = validateForm();
+
     if (validationError) {
       alert(validationError);
       return;
@@ -552,7 +519,7 @@ export default function ListingForm({
         const rent = Number(formData.rent);
         const deposit = Number(formData.deposit) || rent * 2;
 
-        const payload = {
+        const payload = removeUndefined({
           title: formData.title.trim(),
           description: formData.description.trim(),
           roomType: formData.roomType,
@@ -563,6 +530,7 @@ export default function ListingForm({
           furnishing: formData.furnishing,
           preferTenants: formData.preferTenants,
           availableFrom: formData.availableFrom || today,
+          durationDays: formData.durationDays,
           location:
             formData.location ||
             formData.formattedAddress.split(",")[0]?.trim() ||
@@ -581,7 +549,10 @@ export default function ListingForm({
           amenities: [],
           photos,
           status: "available" as const,
-        };
+          viewsCount: isEditing ? undefined : 0,
+          uniqueViewersCount: isEditing ? undefined : 0,
+          chatStartedCount: isEditing ? undefined : 0,
+        });
 
         if (isEditing && existingListing) {
           await updateHousingListing(existingListing.id, payload);
@@ -592,7 +563,7 @@ export default function ListingForm({
           });
         }
       } else {
-        const payload = {
+        const payload = removeUndefined({
           title: formData.title.trim(),
           description: formData.description.trim(),
           category: formData.category,
@@ -603,9 +574,13 @@ export default function ListingForm({
           latitude: formData.latitude,
           longitude: formData.longitude,
           formattedAddress: formData.formattedAddress,
+          durationDays: formData.durationDays,
           photos,
           status: "available" as const,
-        };
+          viewsCount: isEditing ? undefined : 0,
+          uniqueViewersCount: isEditing ? undefined : 0,
+          chatStartedCount: isEditing ? undefined : 0,
+        });
 
         if (isEditing && existingListing) {
           await updateMarketListing(existingListing.id, payload);
@@ -702,7 +677,7 @@ export default function ListingForm({
               <p className="mt-1 text-[11px] font-bold uppercase leading-relaxed tracking-wider text-white/35">
                 {isEditing
                   ? "Changes are visible immediately after saving."
-                  : "Your post is linked to your verified CampusX profile."}
+                  : "Your post is linked to your CampusX profile."}
               </p>
             </div>
           </div>
@@ -825,9 +800,7 @@ export default function ListingForm({
                     type="number"
                     min={0}
                     value={formData.maintenance}
-                    onChange={(event) =>
-                      updateField("maintenance", event.target.value)
-                    }
+                    onChange={(event) => updateField("maintenance", event.target.value)}
                     placeholder="Optional"
                     className="input-pro"
                   />
@@ -877,9 +850,7 @@ export default function ListingForm({
                     type="date"
                     min={today}
                     value={formData.availableFrom}
-                    onChange={(event) =>
-                      updateField("availableFrom", event.target.value)
-                    }
+                    onChange={(event) => updateField("availableFrom", event.target.value)}
                     className="input-pro pl-14"
                   />
                 </div>
@@ -892,9 +863,7 @@ export default function ListingForm({
 
                 <textarea
                   value={formData.restrictions}
-                  onChange={(event) =>
-                    updateField("restrictions", event.target.value)
-                  }
+                  onChange={(event) => updateField("restrictions", event.target.value)}
                   rows={3}
                   placeholder="Example: No smoking, no loud parties, cooking allowed..."
                   className="input-pro resize-none py-5 leading-relaxed"
@@ -917,6 +886,34 @@ export default function ListingForm({
               />
             </div>
           )}
+
+          <div className="space-y-4">
+            <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">
+              Listing duration
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              {[15, 30].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => updateField("durationDays", days as ListingDurationDays)}
+                  className={`rounded-[26px] border px-5 py-5 text-[10px] font-black uppercase tracking-[0.22em] transition-transform duration-150 ease-out active:scale-[0.98] ${
+                    formData.durationDays === days
+                      ? "border-kjc-accent bg-kjc-accent/15 text-white"
+                      : "border-white/10 bg-white/[0.04] text-white/45"
+                  }`}
+                >
+                  {days} days
+                </button>
+              ))}
+            </div>
+
+            <p className="px-2 text-[10px] font-bold leading-relaxed text-white/35">
+              After expiry, your post is hidden from public feed. You can renew it from My posts.
+              Photos are cleaned later to save storage.
+            </p>
+          </div>
 
           <div className="space-y-4">
             <label className="pl-4 text-[10px] font-black uppercase tracking-[0.35em] text-white/25">

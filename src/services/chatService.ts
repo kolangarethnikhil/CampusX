@@ -1,140 +1,332 @@
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  serverTimestamp, 
-  orderBy, 
-  onSnapshot, 
-  updateDoc
-} from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { auth, db, handleFirestoreError, OperationType } from "../lib/firebase";
+
+export type ListingType = "housing" | "market";
+export type MessageStatus = "sent" | "delivered" | "seen";
+
+export interface ListingSnapshot {
+  id: string;
+  type: ListingType;
+  title: string;
+  price?: number;
+  photo?: string;
+  location?: string;
+  statusAtStart?: string;
+  roomType?: string;
+  category?: string;
+  createdAt?: unknown;
+}
 
 export interface Conversation {
   id: string;
   participants: string[];
+  participantsKey?: string;
+
   listingId: string;
   listingTitle: string;
-  listingType: string;
+  listingType: ListingType | string;
+
+  listingSnapshot?: ListingSnapshot;
+
   listingPhoto?: string;
   listingPrice?: number;
   listingStatus?: string;
   listingLocation?: string;
+
   lastMessage?: string;
-  updatedAt: any;
-  unreadCount?: number;
+  lastMessageSenderId?: string;
+  lastMessageAt?: unknown;
+
+  lastDeliveredAtBy?: Record<string, unknown>;
+  lastReadAtBy?: Record<string, unknown>;
+
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 export interface Message {
   id: string;
+  conversationId?: string;
   senderId: string;
   content: string;
-  createdAt: any;
+  status?: MessageStatus;
+  deliveredAt?: unknown;
+  seenAt?: unknown;
+  readBy?: Record<string, unknown>;
+  createdAt?: unknown;
 }
 
-export const startConversation = async (
-  ownerId: string, 
-  listingId: string, 
-  listingTitle: string, 
+export interface ListingMetadata {
+  listingPhoto?: string;
+  listingPrice?: number;
+  listingStatus?: string;
+  listingLocation?: string;
+  listingSnapshot?: ListingSnapshot;
+}
+
+const COLLECTION_NAME = "conversations";
+
+function getCurrentUserId() {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("You must be signed in to use chat.");
+  }
+
+  return user.uid;
+}
+
+function getParticipantsKey(participants: string[]) {
+  return [...participants].sort().join("__");
+}
+
+export async function startConversation(
+  ownerId: string,
+  listingId: string,
+  listingTitle: string,
   listingType: string,
-  listingMetadata?: Pick<
-    Conversation,
-    "listingPhoto" | "listingPrice" | "listingStatus" | "listingLocation"
-  >
-) => {
-  if (!auth.currentUser) throw new Error('Must be signed in');
-  if (auth.currentUser.uid === ownerId) throw new Error('Cannot start chat with yourself');
+  metadata?: ListingMetadata
+): Promise<string> {
+  const currentUserId = getCurrentUserId();
 
-  const path = 'conversations';
+  if (ownerId === currentUserId) {
+    throw new Error("You cannot start a chat with yourself.");
+  }
+
+  const participants = [currentUserId, ownerId];
+  const participantsKey = getParticipantsKey(participants);
+
   try {
-    // Check if conversation already exists
-    const q = query(
-      collection(db, path),
-      where('participants', 'array-contains', auth.currentUser.uid),
-      where('listingId', '==', listingId)
+    const existingQuery = query(
+      collection(db, COLLECTION_NAME),
+      where("participantsKey", "==", participantsKey),
+      where("listingId", "==", listingId),
+      limit(1)
     );
-    
-    const snapshot = await getDocs(q);
-    const existing = snapshot.docs.find(doc => doc.data().participants.includes(ownerId));
-    
-    if (existing) return existing.id;
 
-    // Create new conversation
-    const convRef = collection(db, path);
-    const docRef = await addDoc(convRef, {
-      participants: [auth.currentUser.uid, ownerId],
+    const existingSnapshot = await getDocs(existingQuery);
+
+    if (!existingSnapshot.empty) {
+      const existingDoc = existingSnapshot.docs[0];
+
+      await updateDoc(existingDoc.ref, {
+        updatedAt: serverTimestamp(),
+      });
+
+      return existingDoc.id;
+    }
+
+    const conversationRef = doc(collection(db, COLLECTION_NAME));
+
+    const normalizedListingType: ListingType =
+      listingType === "housing" ? "housing" : "market";
+
+    const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
+      id: listingId,
+      type: normalizedListingType,
+      title: listingTitle,
+      price: metadata?.listingPrice,
+      photo: metadata?.listingPhoto,
+      location: metadata?.listingLocation,
+      statusAtStart: metadata?.listingStatus,
+      createdAt: serverTimestamp(),
+    };
+
+    await setDoc(conversationRef, {
+      participants,
+      participantsKey,
+
       listingId,
       listingTitle,
-      listingType,
-      ...listingMetadata,
+      listingType: normalizedListingType,
+
+      listingSnapshot,
+
+      listingPhoto: metadata?.listingPhoto || listingSnapshot.photo || "",
+      listingPrice: metadata?.listingPrice || listingSnapshot.price || 0,
+      listingStatus: metadata?.listingStatus || listingSnapshot.statusAtStart || "",
+      listingLocation: metadata?.listingLocation || listingSnapshot.location || "",
+
+      lastMessage: "",
+      lastMessageSenderId: "",
+      lastMessageAt: null,
+
+      lastDeliveredAtBy: {},
+      lastReadAtBy: {},
+
+      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      lastMessage: 'Chat started'
     });
 
-    return docRef.id;
+    return conversationRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-    throw error;
+    handleFirestoreError(error, OperationType.CREATE, COLLECTION_NAME);
   }
-};
+}
 
-export const sendMessage = async (conversationId: string, content: string) => {
-  if (!auth.currentUser) throw new Error('Must be signed in');
+export function subscribeToConversations(
+  callback: (conversations: Conversation[]) => void
+) {
+  const currentUserId = auth.currentUser?.uid;
 
-  const path = `conversations/${conversationId}/messages`;
+  if (!currentUserId) {
+    callback([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where("participants", "array-contains", currentUserId),
+    orderBy("updatedAt", "desc")
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        })) as Conversation[]
+      );
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
+      callback([]);
+    }
+  );
+}
+
+export function subscribeToMessages(
+  conversationId: string,
+  callback: (messages: Message[]) => void
+) {
+  const q = query(
+    collection(db, COLLECTION_NAME, conversationId, "messages"),
+    orderBy("createdAt", "asc")
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((item) => ({
+          id: item.id,
+          conversationId,
+          ...item.data(),
+        })) as Message[]
+      );
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, "messages");
+      callback([]);
+    }
+  );
+}
+
+export async function sendMessage(
+  conversationId: string,
+  content: string
+): Promise<void> {
+  const currentUserId = getCurrentUserId();
+  const trimmed = content.trim();
+
+  if (!trimmed) return;
+
   try {
-    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-    await addDoc(messagesRef, {
-      senderId: auth.currentUser.uid,
-      content,
-      createdAt: serverTimestamp()
+    await addDoc(collection(db, COLLECTION_NAME, conversationId, "messages"), {
+      senderId: currentUserId,
+      content: trimmed,
+      status: "sent",
+      readBy: {
+        [currentUserId]: serverTimestamp(),
+      },
+      createdAt: serverTimestamp(),
     });
 
-    const convRef = doc(db, 'conversations', conversationId);
-    await updateDoc(convRef, {
-      lastMessage: content,
-      updatedAt: serverTimestamp()
+    await updateDoc(doc(db, COLLECTION_NAME, conversationId), {
+      lastMessage: trimmed,
+      lastMessageSenderId: currentUserId,
+      lastMessageAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    handleFirestoreError(error, OperationType.CREATE, "messages");
   }
-};
+}
 
-export const subscribeToConversations = (callback: (conversations: Conversation[]) => void) => {
-  if (!auth.currentUser) return () => {};
+export async function markConversationDelivered(conversationId: string) {
+  const currentUserId = auth.currentUser?.uid;
+  if (!currentUserId) return;
 
-  const path = 'conversations';
-  const q = query(
-    collection(db, path),
-    where('participants', 'array-contains', auth.currentUser.uid),
-    orderBy('updatedAt', 'desc')
-  );
+  try {
+    await updateDoc(doc(db, COLLECTION_NAME, conversationId), {
+      [`lastDeliveredAtBy.${currentUserId}`]: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("markConversationDelivered failed:", error);
+  }
+}
 
-  return onSnapshot(q, 
-    (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Conversation)));
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    }
-  );
-};
+export async function markConversationSeen(conversationId: string) {
+  const currentUserId = auth.currentUser?.uid;
+  if (!currentUserId) return;
 
-export const subscribeToMessages = (conversationId: string, callback: (messages: Message[]) => void) => {
-  const path = `conversations/${conversationId}/messages`;
-  const q = query(
-    collection(db, 'conversations', conversationId, 'messages'),
-    orderBy('createdAt', 'asc')
-  );
+  try {
+    await updateDoc(doc(db, COLLECTION_NAME, conversationId), {
+      [`lastDeliveredAtBy.${currentUserId}`]: serverTimestamp(),
+      [`lastReadAtBy.${currentUserId}`]: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("markConversationSeen failed:", error);
+  }
+}
 
-  return onSnapshot(q, 
-    (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
-    }
-  );
-};
+export function getConversationListingSnapshot(conversation: Conversation) {
+  return {
+    title: conversation.listingSnapshot?.title || conversation.listingTitle,
+    photo: conversation.listingSnapshot?.photo || conversation.listingPhoto || "",
+    price: conversation.listingSnapshot?.price || conversation.listingPrice || 0,
+    location:
+      conversation.listingSnapshot?.location ||
+      conversation.listingLocation ||
+      "",
+    status:
+      conversation.listingStatus ||
+      conversation.listingSnapshot?.statusAtStart ||
+      "",
+    type: conversation.listingSnapshot?.type || conversation.listingType,
+  };
+}
+
+export function getMessageVisualStatus(
+  message: Message,
+  conversation: Conversation,
+  currentUserId?: string | null
+): MessageStatus {
+  if (!currentUserId) return "sent";
+  if (message.senderId !== currentUserId) return "seen";
+
+  const otherUserId = conversation.participants.find((id) => id !== currentUserId);
+  if (!otherUserId) return "sent";
+
+  if (conversation.lastReadAtBy?.[otherUserId]) return "seen";
+  if (conversation.lastDeliveredAtBy?.[otherUserId]) return "delivered";
+
+  return message.status || "sent";
+}

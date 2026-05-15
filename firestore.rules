@@ -26,6 +26,14 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= max);
     }
 
+    function optionalNumber(value) {
+      return value == null || value is number;
+    }
+
+    function optionalBool(value) {
+      return value == null || value is bool;
+    }
+
     match /users/{userId} {
       allow get: if signedIn();
       allow list: if false;
@@ -60,37 +68,38 @@ service cloud.firestore {
         return
           (
             !('gender' in incoming()) ||
-            incoming().gender in [
-              'male',
-              'female',
-              'prefer_not_to_say'
-            ]
+            incoming().gender in ['male', 'female', 'prefer_not_to_say']
           )
           &&
           (
             !('discoverySource' in incoming()) ||
-            incoming().discoverySource in [
-              'instagram',
-              'friends',
-              'whatsapp',
-              'college',
-              'other'
-            ]
+            incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other']
           )
           &&
           (
             !('communityIntent' in incoming()) ||
-            incoming().communityIntent in [
-              'explore',
-              'utility',
-              'business',
-              'other'
-            ]
+            incoming().communityIntent in ['explore', 'utility', 'business', 'other']
+          )
+          &&
+          (
+            !('notificationsEnabled' in incoming()) ||
+            incoming().notificationsEnabled is bool
+          )
+          &&
+          (
+            !('marketingOptIn' in incoming()) ||
+            incoming().marketingOptIn is bool
+          )
+          &&
+          (
+            !('emailNotifications' in incoming()) ||
+            incoming().emailNotifications is bool
           );
       }
 
       allow create: if isOwner(userId)
         && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
         && validCampusRole()
         && validVerifiedStatus()
         && validOptionalProfileFields()
@@ -99,6 +108,7 @@ service cloud.firestore {
             isKjcAuthEmail()
             && incoming().campusRole == 'Student'
             && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
           )
           ||
           (
@@ -109,6 +119,7 @@ service cloud.firestore {
 
       allow update: if isOwner(userId)
         && incoming().uid == existing().uid
+        && incoming().email == existing().email
         && validCampusRole()
         && validVerifiedStatus()
         && validOptionalProfileFields()
@@ -128,12 +139,18 @@ service cloud.firestore {
           'discoverySource',
           'communityIntent',
           'profileCompleted',
+          'notificationsEnabled',
+          'marketingOptIn',
+          'emailNotifications',
+          'pushSubscription',
+          'fcmToken',
           'updatedAt'
         ])
         && (
           (
             isKjcAuthEmail()
             && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
           )
           ||
           (
@@ -152,11 +169,28 @@ service cloud.firestore {
         && incoming().postedBy == request.auth.uid
         && validHousingListing(incoming());
 
-      allow update: if isOwner(existing().postedBy)
-        && incoming().postedBy == existing().postedBy
-        && validHousingListing(incoming());
+      allow update: if signedIn()
+        && (
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && validHousingListing(incoming())
+          )
+          ||
+          (
+            request.auth.uid != existing().postedBy
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'viewsCount',
+              'uniqueViewersCount',
+              'chatStartedCount',
+              'lastViewedAt',
+              'lastChatStartedAt',
+              'updatedAt'
+            ])
+          )
+        );
 
-      allow delete: if isOwner(existing().postedBy);
+      allow delete: if false;
 
       function validHousingListing(data) {
         return data.keys().hasAll([
@@ -174,14 +208,7 @@ service cloud.firestore {
         ])
         && validString(data.title, 100)
         && validString(data.description, 2000)
-        && data.roomType in [
-          'roommate',
-          '1RK',
-          '1BHK',
-          '2BHK',
-          '3BHK',
-          'PG'
-        ]
+        && data.roomType in ['roommate', '1RK', '1BHK', '2BHK', '3BHK', 'PG']
         && data.rent is number
         && data.rent > 0
         && data.deposit is number
@@ -189,27 +216,19 @@ service cloud.firestore {
         && (!('maintenance' in data) || data.maintenance is number)
         && (!('maintenance' in data) || data.maintenance >= 0)
         && optionalString(data.restrictions, 1000)
-        && data.preferTenants in [
-          'girls_only',
-          'boys_only',
-          'both',
-          'couples'
-        ]
-        && data.furnishing in [
-          'Unfurnished',
-          'Semi-furnished',
-          'Fully-furnished'
-        ]
+        && data.preferTenants in ['girls_only', 'boys_only', 'both', 'couples']
+        && data.furnishing in ['Unfurnished', 'Semi-furnished', 'Fully-furnished']
         && validString(data.availableFrom, 40)
         && data.latitude is number
         && data.longitude is number
         && validString(data.formattedAddress, 500)
         && data.postedBy == request.auth.uid
-        && data.status in [
-          'available',
-          'reserved',
-          'closed'
-        ];
+        && data.status in ['available', 'reserved', 'closed', 'expired', 'deleted']
+        && (!('durationDays' in data) || data.durationDays in [15, 30])
+        && (!('viewsCount' in data) || data.viewsCount is number)
+        && (!('uniqueViewersCount' in data) || data.uniqueViewersCount is number)
+        && (!('chatStartedCount' in data) || data.chatStartedCount is number)
+        && (!('photosRetained' in data) || data.photosRetained is bool);
       }
     }
 
@@ -220,11 +239,28 @@ service cloud.firestore {
         && incoming().postedBy == request.auth.uid
         && validMarketplaceListing(incoming());
 
-      allow update: if isOwner(existing().postedBy)
-        && incoming().postedBy == existing().postedBy
-        && validMarketplaceListing(incoming());
+      allow update: if signedIn()
+        && (
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && validMarketplaceListing(incoming())
+          )
+          ||
+          (
+            request.auth.uid != existing().postedBy
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'viewsCount',
+              'uniqueViewersCount',
+              'chatStartedCount',
+              'lastViewedAt',
+              'lastChatStartedAt',
+              'updatedAt'
+            ])
+          )
+        );
 
-      allow delete: if isOwner(existing().postedBy);
+      allow delete: if false;
 
       function validMarketplaceListing(data) {
         return data.keys().hasAll([
@@ -240,26 +276,30 @@ service cloud.firestore {
         ])
         && validString(data.title, 100)
         && validString(data.description, 2000)
-        && data.category in [
-          'Furniture',
-          'Electronics',
-          'Books',
-          'Essentials',
-          'Other'
-        ]
+        && data.category in ['Furniture', 'Electronics', 'Books', 'Essentials', 'Other']
         && data.price is number
         && data.price > 0
         && data.latitude is number
         && data.longitude is number
         && validString(data.formattedAddress, 500)
         && data.postedBy == request.auth.uid
-        && data.status in [
-          'available',
-          'reserved',
-          'sold',
-          'closed'
-        ];
+        && data.status in ['available', 'reserved', 'sold', 'closed', 'expired', 'deleted']
+        && (!('durationDays' in data) || data.durationDays in [15, 30])
+        && (!('viewsCount' in data) || data.viewsCount is number)
+        && (!('uniqueViewersCount' in data) || data.uniqueViewersCount is number)
+        && (!('chatStartedCount' in data) || data.chatStartedCount is number)
+        && (!('photosRetained' in data) || data.photosRetained is bool);
       }
+    }
+
+    match /listing_views/{viewId} {
+      allow create, update: if signedIn()
+        && incoming().viewerId == request.auth.uid
+        && incoming().listingOwnerId != request.auth.uid
+        && incoming().listingId is string
+        && incoming().listingType in ['housing', 'market'];
+
+      allow read, delete: if false;
     }
 
     match /saved_listings/{savedId} {
@@ -286,15 +326,23 @@ service cloud.firestore {
         && request.auth.uid in incoming().participants
         && incoming().participants.size() >= 2
         && incoming().participants.size() <= 10
+        && incoming().participantsKey is string
         && incoming().listingId is string
         && incoming().listingTitle is string
-        && incoming().listingType in ['housing', 'market'];
+        && incoming().listingType in ['housing', 'market']
+        && incoming().listingSnapshot is map;
 
       allow update: if signedIn()
         && request.auth.uid in existing().participants
         && incoming().participants == existing().participants
+        && incoming().listingId == existing().listingId
+        && incoming().listingType == existing().listingType
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'lastMessage',
+          'lastMessageSenderId',
+          'lastMessageAt',
+          'lastDeliveredAtBy',
+          'lastReadAtBy',
           'updatedAt'
         ]);
 
@@ -311,9 +359,21 @@ service cloud.firestore {
             /databases/$(database)/documents/conversations/$(conversationId)
           ).data.participants
           && incoming().senderId == request.auth.uid
-          && validString(incoming().content, 1000);
+          && validString(incoming().content, 1000)
+          && incoming().status in ['sent', 'delivered', 'seen'];
 
-        allow update, delete: if false;
+        allow update: if signedIn()
+          && request.auth.uid in get(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data.participants
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status',
+            'deliveredAt',
+            'seenAt',
+            'readBy'
+          ]);
+
+        allow delete: if false;
       }
     }
 
@@ -354,25 +414,10 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    match /reports/{reportId} {
-      allow create: if signedIn()
-        && incoming().reporterId == request.auth.uid;
-
-      allow read, update, delete: if false;
-    }
-
     match /app_issues/{issueId} {
       allow create: if signedIn()
         && incoming().reporterId == request.auth.uid
-        && incoming().type in [
-          'login',
-          'posting',
-          'chat',
-          'map_location',
-          'profile',
-          'safety',
-          'other'
-        ]
+        && incoming().type in ['login', 'posting', 'chat', 'map_location', 'profile', 'safety', 'other']
         && validString(incoming().message, 2000)
         && incoming().status == 'open';
 
@@ -386,6 +431,13 @@ service cloud.firestore {
         && incoming().rating >= 1
         && incoming().rating <= 5
         && optionalString(incoming().message, 2000);
+
+      allow read, update, delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid;
 
       allow read, update, delete: if false;
     }
