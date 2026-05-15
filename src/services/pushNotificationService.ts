@@ -14,6 +14,12 @@ export interface ForegroundPushPayload {
   url?: string;
 }
 
+export interface PushSetupResult {
+  token: string;
+  permission: NotificationPermission | "unsupported";
+  errorMessage?: string;
+}
+
 const REQUIRED_ENV_KEYS = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
@@ -94,12 +100,23 @@ async function registerCampusXServiceWorker() {
   }
 }
 
-export async function requestPushPermissionAndToken(): Promise<{
-  token: string;
-  permission: NotificationPermission | "unsupported";
-}> {
-  assertPushEnvReady();
-  assertNoPlaceholderValues();
+function buildPushSetupError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return `Push notifications could not be enabled right now. ${message}`;
+}
+
+export async function requestPushPermissionAndToken(): Promise<PushSetupResult> {
+  try {
+    assertPushEnvReady();
+    assertNoPlaceholderValues();
+  } catch (error) {
+    return {
+      token: "",
+      permission: "unsupported",
+      errorMessage: buildPushSetupError(error),
+    };
+  }
 
   const supported = await isPushSupported();
 
@@ -119,36 +136,40 @@ export async function requestPushPermissionAndToken(): Promise<{
     };
   }
 
-  const serviceWorkerRegistration = await registerCampusXServiceWorker();
-  const messaging = getMessaging(app);
-  const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
-
-  let token = "";
-
   try {
-    token = await getToken(messaging, {
+    const serviceWorkerRegistration = await registerCampusXServiceWorker();
+    const messaging = getMessaging(app);
+    const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
+
+    const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration,
     });
+
+    const pushSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
+
+    if (!pushSubscription) {
+      return {
+        token: "",
+        permission,
+        errorMessage:
+          "FCM token was generated but the browser push subscription is missing. Clear site data and try again.",
+      };
+    }
+
+    return {
+      token,
+      permission,
+    };
   } catch (error) {
     const sdkMessage = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Messaging: A problem occurred while subscribing the user to FCM: ${sdkMessage}. Ensure your VITE_FIREBASE_* env vars (including VITE_FIREBASE_VAPID_KEY) are configured for your deployment.`
-    );
+
+    return {
+      token: "",
+      permission,
+      errorMessage: `Messaging: A problem occurred while subscribing the user to FCM: ${sdkMessage}. Ensure your Firebase project settings, VAPID key, and hosting origin are configured correctly.`,
+    };
   }
-
-  const pushSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
-
-  if (!pushSubscription) {
-    throw new Error(
-      "FCM token generated but browser push subscription is missing. Clear site data and retry."
-    );
-  }
-
-  return {
-    token,
-    permission,
-  };
 }
 
 export async function buildPushProfileUpdate(): Promise<Partial<UserProfile>> {

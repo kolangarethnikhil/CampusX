@@ -41,6 +41,7 @@ View your app in AI Studio: https://ai.studio/apps/b5e0074b-737a-40e2-a8cb-79f85
    VITE_FIREBASE_STORAGE_BUCKET="paste_from_vercel"
    VITE_FIREBASE_MESSAGING_SENDER_ID="paste_from_vercel"
    VITE_FIREBASE_APP_ID="paste_from_vercel"
+   VITE_FIREBASE_VAPID_KEY="paste_from_vercel"
    VITE_FIREBASE_MEASUREMENT_ID="paste_from_vercel"
    GEMINI_API_KEY="paste_from_vercel"
    ```
@@ -84,6 +85,8 @@ Production deployment to Vercel happens automatically - no need to set up enviro
 **Maps not working locally?** → [MAPS_SETUP_GUIDE.md](./MAPS_SETUP_GUIDE.md) - Copy environment variables from Vercel
 
 **Images not uploading?** → Check Firebase credentials in `.env.local`
+
+**Push notifications failing?** → Confirm the Firebase Web Push VAPID key is set and that Cloud Messaging is enabled for the same Firebase project as the rest of the app.
 
 **Auth issues?** → Verify all Firebase variables are correct
 

@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Bell, Loader2, Mail, Megaphone, ShieldCheck, X } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext.tsx";
 import {
-  buildPushProfileUpdate,
   isPushSupported,
+  requestPushPermissionAndToken,
 } from "../../services/pushNotificationService";
 
 interface NotificationPreferencesModalProps {
@@ -45,20 +45,30 @@ export default function NotificationPreferencesModal({
     setRequestingPush(true);
 
     try {
-      const pushUpdate = await buildPushProfileUpdate();
+      const pushResult = await requestPushPermissionAndToken();
 
-      if (!pushUpdate.fcmToken) {
+      if (!pushResult.token) {
         await updateProfile({
           notificationsEnabled: false,
-          pushPermission: pushUpdate.pushPermission,
+          pushPermission: pushResult.permission,
         });
 
         setNotificationsEnabled(false);
-        alert("Notification permission was not granted.");
+        alert(
+          pushResult.errorMessage ||
+            (pushResult.permission === "unsupported"
+              ? "Push notifications are not supported on this browser or device."
+              : "Notification permission was not granted.")
+        );
         return;
       }
 
-      await updateProfile(pushUpdate);
+      await updateProfile({
+        notificationsEnabled: true,
+        fcmToken: pushResult.token,
+        fcmTokenUpdatedAt: new Date(),
+        pushPermission: pushResult.permission,
+      });
       setNotificationsEnabled(true);
     } catch (error) {
       console.error(error);
