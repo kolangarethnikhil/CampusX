@@ -140,6 +140,10 @@ export async function requestPushPermissionAndToken(): Promise<PushSetupResult> 
     const serviceWorkerRegistration = await registerCampusXServiceWorker();
     const messaging = getMessaging(app);
     const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
+    // TEMP DEBUG - remove after fix
+console.log("VAPID key being used:", vapidKey);
+console.log("VAPID length:", vapidKey?.length);
+console.log("Starts with B:", vapidKey?.startsWith("B"));
 
     const token = await getToken(messaging, {
       vapidKey,

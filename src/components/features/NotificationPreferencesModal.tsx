@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext.tsx";
 import {
   isPushSupported,
   requestPushPermissionAndToken,
-} from "../../services/pushNotificationService";
+} from "../../services/pushNotificationService.ts";
 
 interface NotificationPreferencesModalProps {
   isOpen: boolean;
