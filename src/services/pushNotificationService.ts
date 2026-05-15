@@ -7,6 +7,7 @@ import {
 import { serverTimestamp } from "firebase/firestore";
 import { app } from "../lib/firebase";
 import { UserProfile } from "../contexts/AuthContext";
+import { saveCurrentDevicePushToken } from "./pushTokenService";
 
 export interface ForegroundPushPayload {
   title: string;
@@ -16,6 +17,7 @@ export interface ForegroundPushPayload {
 
 export interface PushSetupResult {
   token: string;
+  tokenHash?: string | null;
   permission: NotificationPermission | "unsupported";
   errorMessage?: string;
 }
@@ -63,7 +65,9 @@ const PLACEHOLDER_PATTERNS = [
 function assertNoPlaceholderValues() {
   const bad = REQUIRED_ENV_KEYS.filter((key) => {
     const value = getEnvValue(key);
+
     if (!value) return false;
+
     return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
   });
 
@@ -94,6 +98,7 @@ async function registerCampusXServiceWorker() {
     return registration;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
     throw new Error(
       `Service worker registration failed: ${message}. Ensure /sw.js is reachable and not blocked by your hosting.`
     );
@@ -124,6 +129,7 @@ export async function requestPushPermissionAndToken(): Promise<PushSetupResult> 
     return {
       token: "",
       permission: "unsupported",
+      errorMessage: "Push notifications are not supported on this browser/device.",
     };
   }
 
@@ -140,17 +146,14 @@ export async function requestPushPermissionAndToken(): Promise<PushSetupResult> 
     const serviceWorkerRegistration = await registerCampusXServiceWorker();
     const messaging = getMessaging(app);
     const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
-    // TEMP DEBUG - remove after fix
-console.log("VAPID key being used:", vapidKey);
-console.log("VAPID length:", vapidKey?.length);
-console.log("Starts with B:", vapidKey?.startsWith("B"));
 
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration,
     });
 
-    const pushSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
+    const pushSubscription =
+      await serviceWorkerRegistration.pushManager.getSubscription();
 
     if (!pushSubscription) {
       return {
@@ -161,8 +164,14 @@ console.log("Starts with B:", vapidKey?.startsWith("B"));
       };
     }
 
+    const tokenHash = await saveCurrentDevicePushToken({
+      token,
+      permission,
+    });
+
     return {
       token,
+      tokenHash,
       permission,
     };
   } catch (error) {

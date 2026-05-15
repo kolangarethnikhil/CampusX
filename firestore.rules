@@ -2,9 +2,6 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
     function signedIn() {
       return request.auth != null;
     }
@@ -29,23 +26,8 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= max);
     }
 
-    // Returns true if the current user is a participant in a conversation doc
-    function isConversationParticipant(data) {
-      return
-        // buyerId / sellerId pattern
-        data.buyerId   == request.auth.uid ||
-        data.sellerId  == request.auth.uid ||
-        // senderId / receiverId pattern
-        data.senderId  == request.auth.uid ||
-        data.receiverId == request.auth.uid ||
-        // participants array pattern
-        (data.participants is list && request.auth.uid in data.participants);
-    }
-
-    // ── Users ─────────────────────────────────────────────────────────────────
-
     match /users/{userId} {
-      allow get:  if signedIn();
+      allow get: if signedIn();
       allow list: if false;
 
       function isKjcAuthEmail() {
@@ -58,24 +40,38 @@ service cloud.firestore {
 
       function validCampusRole() {
         return incoming().campusRole in [
-          'Student', 'Alumni', 'Campus Community', 'Landlord', 'Seller'
+          'Student',
+          'Alumni',
+          'Campus Community',
+          'Landlord',
+          'Seller'
         ];
       }
 
       function validVerifiedStatus() {
-        return incoming().verifiedStatus in ['unverified', 'pending', 'verified'];
+        return incoming().verifiedStatus in [
+          'unverified',
+          'pending',
+          'verified'
+        ];
       }
 
       function validOptionalProfileFields() {
         return
-          (!('gender' in incoming()) || incoming().gender in ['male', 'female', 'prefer_not_to_say'])
-          && (!('discoverySource' in incoming()) || incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other'])
-          && (!('communityIntent' in incoming()) || incoming().communityIntent in ['explore', 'utility', 'business', 'other'])
-          && (!('notificationsEnabled' in incoming()) || incoming().notificationsEnabled is bool)
-          && (!('marketingOptIn' in incoming()) || incoming().marketingOptIn is bool)
-          && (!('emailNotifications' in incoming()) || incoming().emailNotifications is bool)
-          && (!('fcmToken' in incoming()) || incoming().fcmToken is string)
-          && (!('pushPermission' in incoming()) || incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']);
+          (!('gender' in incoming()) ||
+            incoming().gender in ['male', 'female', 'prefer_not_to_say'])
+          &&
+          (!('discoverySource' in incoming()) ||
+            incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other'])
+          &&
+ ||          (!('communityIntent' in incoming()) ||
+            incoming().emailNotifications is bool)
+          &&
+          (!('fcmToken' in incoming()) ||
+            incoming().fcmToken is string)
+          &&
+          (!('pushPermission' in incoming()) ||
+            incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']);
       }
 
       allow create: if isOwner(userId)
@@ -85,8 +81,17 @@ service cloud.firestore {
         && validVerifiedStatus()
         && validOptionalProfileFields()
         && (
-          (isKjcAuthEmail() && incoming().campusRole == 'Student' && incoming().verifiedStatus == 'verified' && incoming().collegeEmail == request.auth.token.email)
-          || (!isKjcAuthEmail() && incoming().verifiedStatus in ['unverified', 'pending'])
+          (
+            isKjcAuthEmail()
+            && incoming().campusRole == 'Student'
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
         );
 
       allow update: if isOwner(userId)
@@ -96,22 +101,61 @@ service cloud.firestore {
         && validVerifiedStatus()
         && validOptionalProfileFields()
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'displayName', 'photoURL', 'bio', 'course', 'batch', 'collegeEmail',
-          'campusRole', 'verifiedStatus', 'passedOutYear', 'currentLocation',
-          'hometown', 'gender', 'discoverySource', 'communityIntent',
-          'profileCompleted', 'notificationsEnabled', 'marketingOptIn',
-          'emailNotifications', 'pushSubscription', 'fcmToken',
-          'fcmTokenUpdatedAt', 'pushPermission', 'updatedAt'
+          'displayName',
+          'photoURL',
+          'bio',
+          'course',
+          'batch',
+          'collegeEmail',
+          'campusRole',
+          'verifiedStatus',
+          'passedOutYear',
+          'currentLocation',
+          'hometown',
+          'gender',
+          'discoverySource',
+          'communityIntent',
+          'profileCompleted',
+          'notificationsEnabled',
+          'marketingOptIn',
+          'emailNotifications',
+          'pushSubscription',
+          'fcmToken',
+          'fcmTokenUpdatedAt',
+          'pushPermission',
+          'updatedAt'
         ])
         && (
-          (isKjcAuthEmail() && incoming().verifiedStatus == 'verified' && incoming().collegeEmail == request.auth.token.email)
-          || (!isKjcAuthEmail() && incoming().verifiedStatus in ['unverified', 'pending'])
+          (
+            isKjcAuthEmail()
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
         );
 
       allow delete: if false;
-    }
 
-    // ── Housing listings ──────────────────────────────────────────────────────
+      match /push_tokens/{tokenId} {
+        allow get, list: if isOwner(userId);
+
+        allow create, update: if isOwner(userId)
+          && incoming().userId == request.auth.uid
+          && incoming().token is string
+          && incoming().tokenHash is string
+          && incoming().enabled is bool
+          && incoming().platform == 'web'
+          && incoming().deviceLabel is string
+          && incoming().userAgent is string
+          && incoming().permission in ['default', 'denied', 'granted', 'unsupported'];
+
+        allow delete: if isOwner(userId);
+      }
+    }
 
     match /housing_listings/{listingId} {
       allow read: if true;
@@ -122,10 +166,21 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && (
-          (isOwner(existing().postedBy) && incoming().postedBy == existing().postedBy && validHousingListing(incoming()))
-          || (request.auth.uid != existing().postedBy && incoming().diff(existing()).affectedKeys().hasOnly([
-              'viewsCount', 'uniqueViewersCount', 'chatStartedCount',
-              'lastViewedAt', 'lastChatStartedAt', 'updatedAt'
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && validHousingListing(incoming())
+          )
+          ||
+          (
+            request.auth.uid != existing().postedBy
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'viewsCount',
+              'uniqueViewersCount',
+              'chatStartedCount',
+              'lastViewedAt',
+              'lastChatStartedAt',
+              'updatedAt'
             ])
           )
         );
@@ -134,14 +189,25 @@ service cloud.firestore {
 
       function validHousingListing(data) {
         return data.keys().hasAll([
-          'title', 'description', 'roomType', 'rent', 'deposit',
-          'postedBy', 'status', 'latitude', 'longitude', 'formattedAddress', 'availableFrom'
+          'title',
+          'description',
+          'roomType',
+          'rent',
+          'deposit',
+          'postedBy',
+          'status',
+          'latitude',
+          'longitude',
+          'formattedAddress',
+          'availableFrom'
         ])
         && validString(data.title, 100)
         && validString(data.description, 2000)
         && data.roomType in ['roommate', '1RK', '1BHK', '2BHK', '3BHK', 'PG']
-        && data.rent is number && data.rent > 0
-        && data.deposit is number && data.deposit >= 0
+        && data.rent is number
+        && data.rent > 0
+        && data.deposit is number
+        && data.deposit >= 0
         && (!('maintenance' in data) || (data.maintenance is number && data.maintenance >= 0))
         && optionalString(data.restrictions, 1000)
         && data.preferTenants in ['girls_only', 'boys_only', 'both', 'couples']
@@ -160,8 +226,6 @@ service cloud.firestore {
       }
     }
 
-    // ── Marketplace listings ──────────────────────────────────────────────────
-
     match /marketplace_listings/{listingId} {
       allow read: if true;
 
@@ -171,10 +235,21 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && (
-          (isOwner(existing().postedBy) && incoming().postedBy == existing().postedBy && validMarketplaceListing(incoming()))
-          || (request.auth.uid != existing().postedBy && incoming().diff(existing()).affectedKeys().hasOnly([
-              'viewsCount', 'uniqueViewersCount', 'chatStartedCount',
-              'lastViewedAt', 'lastChatStartedAt', 'updatedAt'
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && validMarketplaceListing(incoming())
+          )
+          ||
+          (
+            request.auth.uid != existing().postedBy
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'viewsCount',
+              'uniqueViewersCount',
+              'chatStartedCount',
+              'lastViewedAt',
+              'lastChatStartedAt',
+              'updatedAt'
             ])
           )
         );
@@ -183,13 +258,21 @@ service cloud.firestore {
 
       function validMarketplaceListing(data) {
         return data.keys().hasAll([
-          'title', 'description', 'category', 'price',
-          'postedBy', 'status', 'latitude', 'longitude', 'formattedAddress'
+          'title',
+          'description',
+          'category',
+          'price',
+          'postedBy',
+          'status',
+          'latitude',
+          'longitude',
+          'formattedAddress'
         ])
         && validString(data.title, 100)
         && validString(data.description, 2000)
         && data.category in ['Furniture', 'Electronics', 'Books', 'Essentials', 'Other']
-        && data.price is number && data.price > 0
+        && data.price is number
+        && data.price > 0
         && data.latitude is number
         && data.longitude is number
         && validString(data.formattedAddress, 500)
@@ -203,16 +286,24 @@ service cloud.firestore {
       }
     }
 
-    // ── Listing views ─────────────────────────────────────────────────────────
-
     match /listing_views/{viewId} {
-      allow read:   if signedIn();
-      allow create: if signedIn()
-        && incoming().userId == request.auth.uid;
-      allow update, delete: if false;
-    }
+      allow create, update: if signedIn()
+        && (
+          (
+            incoming().viewerId == request.auth.uid
+            && incoming().listingOwnerId != request.auth.uid
+            && incoming().listingId is string
+            && incoming().listingType in ['housing', 'market']
+          )
+          ||
+          (
+            incoming().userId == request.auth.uid
+          )
+        );
 
-    // ── Saved listings ────────────────────────────────────────────────────────
+      allow read: if signedIn();
+      allow delete: if false;
+    }
 
     match /saved_listings/{savedId} {
       allow read: if signedIn()
@@ -229,38 +320,50 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // ── Conversations ─────────────────────────────────────────────────────────
-
     match /conversations/{conversationId} {
-  allow list: if signedIn();  // ← allows the "find existing convo" query
+      allow list: if signedIn();
 
-  allow get: if signedIn()
-    && request.auth.uid in resource.data.participants;
+      allow get: if signedIn()
+        && request.auth.uid in resource.data.participants;
 
-  allow create: if signedIn()
-    && request.auth.uid in request.resource.data.participants;
+      allow create: if signedIn()
+        && incoming().participants is list
+        && request.auth.uid in incoming().participants
+        && incoming().participants.size() >= 2
+        && incoming().participants.size() <= 10;
 
-  allow update: if signedIn()
-    && request.auth.uid in resource.data.participants;
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participants;
 
-  allow delete: if false;
+      allow delete: if false;
 
-  match /messages/{messageId} {
-    allow read: if signedIn()
-      && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && request.auth.uid in get(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data.participants;
 
-    allow create: if signedIn()
-      && incoming().senderId == request.auth.uid
-      && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        allow create: if signedIn()
+          && incoming().senderId == request.auth.uid
+          && validString(incoming().content, 1000)
+          && request.auth.uid in get(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data.participants;
 
-    allow update: if signedIn()
-      && resource.data.senderId == request.auth.uid;
+        allow update: if signedIn()
+          && request.auth.uid in get(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data.participants
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status',
+            'deliveredAt',
+            'seenAt',
+            'readBy'
+          ]);
 
-    allow delete: if false;
-  }
-}
-
-    // ── Reports ───────────────────────────────────────────────────────────────
+        allow delete: if false;
+      }
+    }
 
     match /listing_reports/{reportId} {
       allow create: if signedIn()
@@ -271,8 +374,13 @@ service cloud.firestore {
         && incoming().listingTitle is string
         && incoming().listingOwnerId is string
         && incoming().reason in [
-          'fake_listing', 'scam', 'wrong_location',
-          'already_unavailable', 'spam', 'unsafe', 'other'
+          'fake_listing',
+          'scam',
+          'wrong_location',
+          'already_unavailable',
+          'spam',
+          'unsafe',
+          'other'
         ]
         && incoming().status == 'open';
 
@@ -285,8 +393,6 @@ service cloud.firestore {
 
       allow read, update, delete: if false;
     }
-
-    // ── User blocks ───────────────────────────────────────────────────────────
 
     match /user_blocks/{blockId} {
       allow create: if signedIn()
@@ -302,8 +408,6 @@ service cloud.firestore {
 
       allow update: if false;
     }
-
-    // ── App issues & feedback ─────────────────────────────────────────────────
 
     match /app_issues/{issueId} {
       allow create: if signedIn()
@@ -326,10 +430,17 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
-    // ── Deny everything else ──────────────────────────────────────────────────
-
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
+``
+            incoming().communityIntent in ['explore', 'utility', 'business', 'other'])
+          &&
+          (!('notificationsEnabled' in incoming()) ||
+            incoming().notificationsEnabled is bool)
+          &&
+          (!('marketingOptIn' in incoming()) ||
+            incoming().marketingOptIn is bool)
+          &&
