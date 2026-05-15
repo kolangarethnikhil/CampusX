@@ -60,3 +60,5 @@ export function handleFirestoreError(
   console.error("Firestore Error:", errInfo);
   throw new Error(JSON.stringify(errInfo));
 }
+(window as any).__firebaseApp  = app;
+(window as any).__campusxVapid = import.meta.env.VITE_FIREBASE_VAPID_KEY;
