@@ -50,7 +50,7 @@ import ForegroundNotificationToast from "../features/ForegroundNotificationToast
 import {
   ForegroundPushPayload,
   listenForForegroundMessages,
-} from "../../services/pushNotificationService";
+} from "../../services/pushNotificationService.ts";
 
 type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
@@ -1512,9 +1512,9 @@ export default function Shell() {
 
     let unsubscribe: (() => void) | undefined;
 
-    listenForForegroundMessages((payload) => {
+    void listenForForegroundMessages((payload: ForegroundPushPayload) => {
       setForegroundPush(payload);
-    }).then((cleanup) => {
+    }).then((cleanup: () => void) => {
       unsubscribe = cleanup;
     });
 
