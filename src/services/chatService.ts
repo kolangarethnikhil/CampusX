@@ -21,10 +21,10 @@ export interface ListingSnapshot {
   id: string;
   type: ListingType;
   title: string;
-  price?: number;
-  photo?: string;
-  location?: string;
-  statusAtStart?: string;
+  price?: number | null;
+  photo?: string | null;
+  location?: string | null;
+  statusAtStart?: string | null;
   roomType?: string;
   category?: string;
   createdAt?: unknown;
@@ -161,10 +161,10 @@ export async function startConversation(
       id: listingId,
       type: normalizedListingType,
       title: listingTitle,
-      price: metadata?.listingPrice,
-      photo: metadata?.listingPhoto,
-      location: metadata?.listingLocation,
-      statusAtStart: metadata?.listingStatus,
+      price: metadata?.listingPrice ?? null,
+      photo: metadata?.listingPhoto ?? null,
+      location: metadata?.listingLocation ?? null,
+      statusAtStart: metadata?.listingStatus ?? null,
       createdAt: serverTimestamp(),
     };
     console.log("CampusX conversation create payload", {
