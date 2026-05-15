@@ -167,7 +167,14 @@ export async function startConversation(
       statusAtStart: metadata?.listingStatus,
       createdAt: serverTimestamp(),
     };
-
+    console.log("CampusX conversation create payload", {
+  participants,
+  participantsKey,
+  listingId,
+  listingTitle,
+  listingType: normalizedListingType,
+  listingSnapshot,
+});
     await setDoc(conversationRef, {
       participants,
       participantsKey,
