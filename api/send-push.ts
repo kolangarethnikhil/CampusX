@@ -31,17 +31,12 @@ function getFirebaseAdminApp() {
 
 function normalizeUrl(url?: string) {
   if (!url?.trim()) return "/";
-
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
-  }
-
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return url.startsWith("/") ? url : `/${url}`;
 }
 
 function getTokenPreview(token: string) {
   if (token.length <= 18) return token;
-
   return `${token.slice(0, 10)}...${token.slice(-8)}`;
 }
 
@@ -98,18 +93,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fcmOptions: {
           link: targetUrl,
         },
-        notification: {
-          title,
-          body,
-          icon: "/icons/icon-192.png",
-          badge: "/icons/icon-192.png",
-          tag: `campusx-${Date.now()}`,
-          renotify: true,
-          requireInteraction: true,
-          data: {
-            url: targetUrl,
-          },
-        },
       },
     };
 
@@ -125,7 +108,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error("send-push failed:", {
       code: error?.code,
       message: error?.message,
-      stack: error?.stack,
     });
 
     return res.status(500).json({

@@ -322,70 +322,61 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow read: if signedIn()
-        && request.auth.uid in resource.data.participants;
+  allow read: if signedIn()
+    && request.auth.uid in resource.data.participants;
 
-      allow create: if signedIn()
-        && incoming().participants is list
-        && request.auth.uid in incoming().participants
-        && incoming().participants.size() >= 2
-        && incoming().participants.size() <= 10
-        && incoming().listingId is string
-        && incoming().listingTitle is string
-        && incoming().listingType in ['housing', 'market']
-        && (
-          !('participantsKey' in incoming()) ||
-          incoming().participantsKey is string
-        )
-        && (
-          !('listingSnapshot' in incoming()) ||
-          incoming().listingSnapshot is map
-        );
+  allow create: if signedIn()
+    && incoming().participants is list
+    && request.auth.uid in incoming().participants
+    && incoming().participants.size() >= 2
+    && incoming().listingId is string
+    && incoming().listingTitle is string
+    && incoming().listingType in ['housing', 'market'];
 
-      allow update: if signedIn()
-        && request.auth.uid in existing().participants
-        && incoming().participants == existing().participants
-        && incoming().listingId == existing().listingId
-        && incoming().listingType == existing().listingType
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'lastMessage',
-          'lastMessageSenderId',
-          'lastMessageAt',
-          'lastDeliveredAtBy',
-          'lastReadAtBy',
-          'updatedAt'
-        ]);
+  allow update: if signedIn()
+    && request.auth.uid in existing().participants
+    && incoming().participants == existing().participants
+    && incoming().listingId == existing().listingId
+    && incoming().listingType == existing().listingType
+    && incoming().diff(existing()).affectedKeys().hasOnly([
+      'lastMessage',
+      'lastMessageSenderId',
+      'lastMessageAt',
+      'lastDeliveredAtBy',
+      'lastReadAtBy',
+      'updatedAt'
+    ]);
 
-      allow delete: if false;
+  allow delete: if false;
 
-      match /messages/{messageId} {
-        allow read: if signedIn()
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants;
+  match /messages/{messageId} {
+    allow read: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants;
 
-        allow create: if signedIn()
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants
-          && incoming().senderId == request.auth.uid
-          && validString(incoming().content, 1000)
-          && incoming().status in ['sent', 'delivered', 'seen'];
+    allow create: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants
+      && incoming().senderId == request.auth.uid
+      && validString(incoming().content, 1000)
+      && incoming().status in ['sent', 'delivered', 'seen'];
 
-        allow update: if signedIn()
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants
-          && incoming().diff(existing()).affectedKeys().hasOnly([
-            'status',
-            'deliveredAt',
-            'seenAt',
-            'readBy'
-          ]);
+    allow update: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants
+      && incoming().diff(existing()).affectedKeys().hasOnly([
+        'status',
+        'deliveredAt',
+        'seenAt',
+        'readBy'
+      ]);
 
-        allow delete: if false;
-      }
-    }
+    allow delete: if false;
+  }
+}
 
     match /listing_reports/{reportId} {
       allow create: if signedIn()

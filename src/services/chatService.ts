@@ -93,6 +93,29 @@ function getParticipantsKey(participants: string[]) {
   return [...participants].sort().join("__");
 }
 
+async function notifyReceiver(conversationId: string, message: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    const token = await user.getIdToken();
+
+    await fetch("/api/notify-message", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        conversationId,
+        message,
+      }),
+    });
+  } catch (error) {
+    console.error("notifyReceiver failed:", error);
+  }
+}
+
 export async function startConversation(
   ownerId: string,
   listingId: string,
@@ -263,6 +286,8 @@ export async function sendMessage(
       lastMessageAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    void notifyReceiver(conversationId, trimmed);
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, "messages");
   }

@@ -1,6 +1,6 @@
+import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { initializeApp } from "firebase/app";
 import { getMessaging, onBackgroundMessage } from "firebase/messaging/sw";
-import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -26,20 +26,17 @@ const firebaseApp = initializeApp(firebaseConfig);
 const messaging = getMessaging(firebaseApp);
 
 function showCampusXNotification(payload) {
-  const title = payload.notification?.title || payload.data?.title || "CampusX";
-  const body =
-    payload.notification?.body ||
-    payload.data?.body ||
-    "You have a new CampusX update.";
+  const title = payload.data?.title || "CampusX";
+  const body = payload.data?.body || "You have a new CampusX update.";
   const url = payload.data?.url || "/";
 
   return self.registration.showNotification(title, {
     body,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    tag: `campusx-${Date.now()}`,
+    tag: "campusx-push",
     renotify: true,
-    requireInteraction: true,
+    requireInteraction: false,
     data: {
       url,
     },
@@ -48,26 +45,6 @@ function showCampusXNotification(payload) {
 
 onBackgroundMessage(messaging, (payload) => {
   showCampusXNotification(payload);
-});
-
-self.addEventListener("push", (event) => {
-  if (!event.data) return;
-
-  let payload;
-
-  try {
-    payload = event.data.json();
-  } catch {
-    payload = {
-      data: {
-        title: "CampusX",
-        body: event.data.text(),
-        url: "/",
-      },
-    };
-  }
-
-  event.waitUntil(showCampusXNotification(payload));
 });
 
 self.addEventListener("notificationclick", (event) => {
