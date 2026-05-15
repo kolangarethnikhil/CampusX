@@ -26,14 +26,6 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= max);
     }
 
-    function optionalNumber(value) {
-      return value == null || value is number;
-    }
-
-    function optionalBool(value) {
-      return value == null || value is bool;
-    }
-
     match /users/{userId} {
       allow get: if signedIn();
       allow list: if false;
@@ -94,6 +86,16 @@ service cloud.firestore {
           (
             !('emailNotifications' in incoming()) ||
             incoming().emailNotifications is bool
+          )
+          &&
+          (
+            !('fcmToken' in incoming()) ||
+            incoming().fcmToken is string
+          )
+          &&
+          (
+            !('pushPermission' in incoming()) ||
+            incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']
           );
       }
 
@@ -328,11 +330,17 @@ service cloud.firestore {
         && request.auth.uid in incoming().participants
         && incoming().participants.size() >= 2
         && incoming().participants.size() <= 10
-        && incoming().participantsKey is string
         && incoming().listingId is string
         && incoming().listingTitle is string
         && incoming().listingType in ['housing', 'market']
-        && incoming().listingSnapshot is map;
+        && (
+          !('participantsKey' in incoming()) ||
+          incoming().participantsKey is string
+        )
+        && (
+          !('listingSnapshot' in incoming()) ||
+          incoming().listingSnapshot is map
+        );
 
       allow update: if signedIn()
         && request.auth.uid in existing().participants

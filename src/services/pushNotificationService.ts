@@ -1,7 +1,12 @@
-import { getMessaging, getToken, isSupported, onMessage } from "firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  isSupported,
+  onMessage,
+} from "firebase/messaging";
 import { serverTimestamp } from "firebase/firestore";
-import { app } from "../lib/firebase.ts";
-import { UserProfile } from "../contexts/AuthContext.tsx";
+import { app } from "../lib/firebase";
+import { UserProfile } from "../contexts/AuthContext";
 
 export interface ForegroundPushPayload {
   title: string;
@@ -20,7 +25,12 @@ const REQUIRED_ENV_KEYS = [
 ] as const;
 
 function getEnvValue(key: (typeof REQUIRED_ENV_KEYS)[number]) {
-  return import.meta.env[key] as string | undefined;
+  const raw = import.meta.env[key] as string | undefined;
+
+  return raw
+    ?.trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s/g, "");
 }
 
 function assertPushEnvReady() {
@@ -28,6 +38,14 @@ function assertPushEnvReady() {
 
   if (missing.length > 0) {
     throw new Error(`Missing push env values: ${missing.join(", ")}`);
+  }
+
+  const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY") || "";
+
+  if (vapidKey.length < 70 || !vapidKey.startsWith("B")) {
+    throw new Error(
+      "Invalid VITE_FIREBASE_VAPID_KEY. Use Firebase Console → Project settings → Cloud Messaging → Web Push certificates → public key."
+    );
   }
 }
 
@@ -81,10 +99,13 @@ export async function requestPushPermissionAndToken(): Promise<{
     buildServiceWorkerUrl()
   );
 
+  await navigator.serviceWorker.ready;
+
   const messaging = getMessaging(app);
+  const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
 
   const token = await getToken(messaging, {
-    vapidKey: getEnvValue("VITE_FIREBASE_VAPID_KEY"),
+    vapidKey,
     serviceWorkerRegistration: swRegistration,
   });
 
