@@ -14,9 +14,6 @@ export interface ForegroundPushPayload {
   url?: string;
 }
 
-const FIREBASE_MESSAGING_SW_PATH = "/firebase-messaging-sw.js";
-const FIREBASE_MESSAGING_SW_SCOPE = "/firebase-cloud-messaging-push-scope/";
-
 const REQUIRED_ENV_KEYS = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
@@ -30,10 +27,7 @@ const REQUIRED_ENV_KEYS = [
 function getEnvValue(key: (typeof REQUIRED_ENV_KEYS)[number]) {
   const raw = import.meta.env[key] as string | undefined;
 
-  return raw
-    ?.trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/\s/g, "");
+  return raw?.trim().replace(/^["']|["']$/g, "").replace(/\s/g, "");
 }
 
 function assertPushEnvReady() {
@@ -52,17 +46,26 @@ function assertPushEnvReady() {
   }
 }
 
-function buildServiceWorkerUrl() {
-  const params = new URLSearchParams({
-    apiKey: getEnvValue("VITE_FIREBASE_API_KEY") || "",
-    authDomain: getEnvValue("VITE_FIREBASE_AUTH_DOMAIN") || "",
-    projectId: getEnvValue("VITE_FIREBASE_PROJECT_ID") || "",
-    storageBucket: getEnvValue("VITE_FIREBASE_STORAGE_BUCKET") || "",
-    messagingSenderId: getEnvValue("VITE_FIREBASE_MESSAGING_SENDER_ID") || "",
-    appId: getEnvValue("VITE_FIREBASE_APP_ID") || "",
+const PLACEHOLDER_PATTERNS = [
+  /YOUR_FIREBASE_API_KEY/i,
+  /your-app-id/i,
+  /your-project(?:-| )?id/i,
+  /your-project\.firebaseapp\.com/i,
+  /your-project\.appspot\.com/i,
+];
+
+function assertNoPlaceholderValues() {
+  const bad = REQUIRED_ENV_KEYS.filter((key) => {
+    const value = getEnvValue(key);
+    if (!value) return false;
+    return PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(value));
   });
 
-  return `${FIREBASE_MESSAGING_SW_PATH}?${params.toString()}`;
+  if (bad.length > 0) {
+    throw new Error(
+      `Push env values appear to be placeholders: ${bad.join(", ")}. Replace with your Firebase project values (Vercel env vars).`
+    );
+  }
 }
 
 export async function isPushSupported() {
@@ -74,21 +77,19 @@ export async function isPushSupported() {
   return isSupported();
 }
 
-async function registerFirebaseMessagingServiceWorker() {
-  const swUrl = buildServiceWorkerUrl();
-
+async function registerCampusXServiceWorker() {
   try {
-    const registration = await navigator.serviceWorker.register(swUrl, {
-      scope: FIREBASE_MESSAGING_SW_SCOPE,
+    const registration = await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
     });
 
     await navigator.serviceWorker.ready;
 
     return registration;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Service worker registration failed: ${msg}. Ensure ${FIREBASE_MESSAGING_SW_PATH} is reachable and not blocked by your hosting (CORS or 404).`
+      `Service worker registration failed: ${message}. Ensure /sw.js is reachable and not blocked by your hosting.`
     );
   }
 }
@@ -118,8 +119,7 @@ export async function requestPushPermissionAndToken(): Promise<{
     };
   }
 
-  const serviceWorkerRegistration = await registerFirebaseMessagingServiceWorker();
-
+  const serviceWorkerRegistration = await registerCampusXServiceWorker();
   const messaging = getMessaging(app);
   const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
 
@@ -130,15 +130,14 @@ export async function requestPushPermissionAndToken(): Promise<{
       vapidKey,
       serviceWorkerRegistration,
     });
-  } catch (err) {
-    const sdkMessage = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const sdkMessage = error instanceof Error ? error.message : String(error);
     throw new Error(
       `Messaging: A problem occurred while subscribing the user to FCM: ${sdkMessage}. Ensure your VITE_FIREBASE_* env vars (including VITE_FIREBASE_VAPID_KEY) are configured for your deployment.`
     );
   }
 
-  const pushSubscription =
-    await serviceWorkerRegistration.pushManager.getSubscription();
+  const pushSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
 
   if (!pushSubscription) {
     throw new Error(
@@ -184,26 +183,4 @@ export async function listenForForegroundMessages(
       url: payload.data?.url || "/",
     });
   });
-}
-
-const PLACEHOLDER_PATTERNS = [
-  /YOUR_FIREBASE_API_KEY/i,
-  /your-app-id/i,
-  /your-project(?:-| )?id/i,
-  /your-project\.firebaseapp\.com/i,
-  /your-project\.appspot\.com/i,
-];
-
-function assertNoPlaceholderValues() {
-  const bad = REQUIRED_ENV_KEYS.filter((k) => {
-    const v = getEnvValue(k);
-    if (!v) return false;
-    return PLACEHOLDER_PATTERNS.some((rx) => rx.test(v));
-  });
-
-  if (bad.length > 0) {
-    throw new Error(
-      `Push env values appear to be placeholders: ${bad.join(", ")}. Replace with your Firebase project values (Vercel env vars).`
-    );
-  }
 }
