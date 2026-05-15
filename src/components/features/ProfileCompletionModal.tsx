@@ -6,7 +6,7 @@ import {
   DiscoverySource,
   GenderOption,
   useAuth,
-} from "../../contexts/AuthContext";
+} from "../../contexts/AuthContext.tsx";
 
 interface ProfileCompletionModalProps {
   isOpen: boolean;

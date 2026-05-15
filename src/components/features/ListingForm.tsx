@@ -26,7 +26,7 @@ import {
   updateMarketListing,
 } from "../../services/marketService";
 import { uploadMultipleImages } from "../../services/storageService";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../contexts/AuthContext.tsx";
 import { getVehicleRouteFromKju } from "../../utils/location";
 import LocationSelector from "./LocationSelector";
 

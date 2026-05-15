@@ -2,25 +2,33 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
   browserLocalPersistence,
-  onAuthStateChanged,
-  GoogleAuthProvider,
   setPersistence,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  GoogleAuthProvider,
+  onAuthStateChanged,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 
-export type CampusRole = "Student" | "Alumni" | "Campus Community" | "Landlord" | "Seller";
+export type CampusRole =
+  | "Student"
+  | "Alumni"
+  | "Campus Community"
+  | "Landlord"
+  | "Seller";
+
 export type VerifiedStatus = "unverified" | "pending" | "verified";
 export type GenderOption = "male" | "female" | "prefer_not_to_say";
+
 export type DiscoverySource =
   | "instagram"
   | "friends"
   | "whatsapp"
   | "college"
   | "other";
+
 export type CommunityIntent =
   | "explore"
   | "utility"
@@ -35,6 +43,7 @@ export interface UserProfile {
   collegeEmail?: string;
   campusRole: CampusRole;
   verifiedStatus: VerifiedStatus;
+
   gender?: GenderOption;
   batch?: string;
   course?: string;
@@ -45,6 +54,15 @@ export interface UserProfile {
   discoverySource?: DiscoverySource;
   communityIntent?: CommunityIntent;
   profileCompleted?: boolean;
+
+  notificationsEnabled?: boolean;
+  emailNotifications?: boolean;
+  marketingOptIn?: boolean;
+  fcmToken?: string;
+  fcmTokenUpdatedAt?: unknown;
+  pushPermission?: NotificationPermission | "unsupported";
+  pushSubscription?: unknown;
+
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -69,6 +87,12 @@ const isOfficialKjcEmail = (email?: string | null) => {
     normalized.endsWith("@kjc.edu.in")
   );
 };
+
+function removeUndefined<T extends Record<string, unknown>>(data: T) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as Partial<T>;
+}
 
 function isProfileComplete(profile: UserProfile | null) {
   if (!profile) return false;
@@ -149,6 +173,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           campusRole: officialKjcEmail ? "Student" : "Campus Community",
           verifiedStatus: officialKjcEmail ? "verified" : "unverified",
           profileCompleted: false,
+          notificationsEnabled: false,
+          emailNotifications: false,
+          marketingOptIn: false,
+          pushPermission:
+            typeof Notification === "undefined" ? "unsupported" : Notification.permission,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         };
@@ -199,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (!user || !profile) throw new Error("User not authenticated");
 
-    const safeData = removeUndefined({ ...data });
+    const safeData = removeUndefined({ ...data }) as Partial<UserProfile>;
 
     safeData.uid = profile.uid;
     safeData.email = profile.email;
@@ -214,16 +243,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...safeData,
     };
 
+    const profileCompleted = isProfileComplete({
+      ...nextProfile,
+      profileCompleted: true,
+    });
+
     const docRef = doc(db, "users", user.uid);
 
     await setDoc(
       docRef,
       {
         ...safeData,
-        profileCompleted: isProfileComplete({
-          ...nextProfile,
-          profileCompleted: true,
-        }),
+        profileCompleted,
         updatedAt: serverTimestamp(),
       },
       { merge: true }
@@ -234,11 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ? {
             ...prev,
             ...safeData,
-            profileCompleted: isProfileComplete({
-              ...prev,
-              ...safeData,
-              profileCompleted: true,
-            }),
+            profileCompleted,
           }
         : prev
     );
@@ -261,11 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-function removeUndefined<T extends Record<string, unknown>>(data: T) {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== undefined)
-  ) as Partial<T>;
-}
+
 export function useAuth() {
   const context = useContext(AuthContext);
 

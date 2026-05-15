@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
 
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../contexts/AuthContext.tsx";
 import { db } from "../../lib/firebase";
 import {
   closeHousingListing,
@@ -44,6 +44,13 @@ import {
 } from "../../services/marketService";
 import ProfileCompletionModal from "../features/ProfileCompletionModal";
 import AppFeedbackModal from "../features/AppFeedbackModal";
+import NotificationPreferencesModal from "../features/NotificationPreferencesModal";
+import SavedPostsSection from "../features/SavedPostsSection";
+import ForegroundNotificationToast from "../features/ForegroundNotificationToast";
+import {
+  ForegroundPushPayload,
+  listenForForegroundMessages,
+} from "../../services/pushNotificationService";
 
 type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
@@ -1488,6 +1495,8 @@ export default function Shell() {
   const [chatToOpenId, setChatToOpenId] = useState<string | null>(null);
   const [selectedUserProfile, setSelectedUserProfile] = useState<UserLite | null>(null);
   const [isUserPreviewOpen, setIsUserPreviewOpen] = useState(false);
+  const [notificationPrefsOpen, setNotificationPrefsOpen] = useState(false);
+  const [foregroundPush, setForegroundPush] = useState<ForegroundPushPayload | null>(null);
 
   const [editingListing, setEditingListing] = useState<HousingListing | MarketListing | null>(null);
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
@@ -1497,6 +1506,22 @@ export default function Shell() {
   useEffect(() => {
     void loadData();
   }, [activeTab, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !profile?.notificationsEnabled) return;
+
+    let unsubscribe: (() => void) | undefined;
+
+    listenForForegroundMessages((payload) => {
+      setForegroundPush(payload);
+    }).then((cleanup) => {
+      unsubscribe = cleanup;
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [user?.uid, profile?.notificationsEnabled]);
 
   useEffect(() => {
     if (!pendingIntent || !user || !profile) return;
@@ -2058,6 +2083,14 @@ export default function Shell() {
                       Report app issue
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => setNotificationPrefsOpen(true)}
+                      className="mt-3 w-full rounded-[26px] border border-kjc-accent/20 bg-kjc-accent/10 px-6 py-4 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
+                    >
+                      Notification settings
+                    </button>
+
                     {!profileCompleted && (
                       <button
                         type="button"
@@ -2068,6 +2101,11 @@ export default function Shell() {
                       </button>
                     )}
                   </div>
+
+                  <SavedPostsSection
+                    refreshKey={user?.uid}
+                    onOpenDetails={openListingDetails}
+                  />
 
                   <MyPostsPage
                     housing={myHousingData}
@@ -2187,6 +2225,16 @@ export default function Shell() {
         type={reportListingType}
         currentUserId={user?.uid || null}
         onClose={() => setReportListing(null)}
+      />
+
+      <NotificationPreferencesModal
+        isOpen={notificationPrefsOpen}
+        onClose={() => setNotificationPrefsOpen(false)}
+      />
+
+      <ForegroundNotificationToast
+        payload={foregroundPush}
+        onClose={() => setForegroundPush(null)}
       />
 
       <VerificationModal

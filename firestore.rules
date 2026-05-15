@@ -144,6 +144,8 @@ service cloud.firestore {
           'emailNotifications',
           'pushSubscription',
           'fcmToken',
+          'fcmTokenUpdatedAt',
+          'pushPermission',
           'updatedAt'
         ])
         && (
