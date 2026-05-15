@@ -10,6 +10,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      strategies: 'injectManifest',
+      injectManifest: {
+        swSrc: 'src/firebase-sw.js',
+        swDest: 'sw.js',
+      },
       includeAssets: ["icons/icon-192.png", "icons/icon-512.png", "og-image.png"],
       manifest: {
   name: "CampusX",
