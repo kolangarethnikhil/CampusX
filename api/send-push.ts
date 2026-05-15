@@ -55,22 +55,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const messageId = await admin.messaging().send({
       token,
-      notification: {
-        title,
-        body,
-      },
       data: {
         title,
         body,
         url,
       },
       webpush: {
+        headers: {
+          Urgency: "high",
+          TTL: "86400",
+        },
         fcmOptions: {
           link: url,
         },
         notification: {
+          title,
+          body,
           icon: "/icons/icon-192.png",
           badge: "/icons/icon-192.png",
+          tag: "campusx-message",
+          requireInteraction: false,
+          data: {
+            url,
+          },
         },
       },
     });
