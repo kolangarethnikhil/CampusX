@@ -1,6 +1,14 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
 
+type PushBody = {
+  token?: string;
+  title?: string;
+  body?: string;
+  url?: string;
+  dryRun?: boolean;
+};
+
 function getFirebaseAdminApp() {
   if (admin.apps.length > 0) {
     return admin.app();
@@ -21,16 +29,38 @@ function getFirebaseAdminApp() {
   });
 }
 
+function normalizeUrl(url?: string) {
+  if (!url?.trim()) return "/";
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  return url.startsWith("/") ? url : `/${url}`;
+}
+
+function getTokenPreview(token: string) {
+  if (token.length <= 18) return token;
+
+  return `${token.slice(0, 10)}...${token.slice(-8)}`;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      ok: false,
+      error: "Method not allowed",
+    });
   }
 
   try {
     const internalSecret = req.headers["x-campusx-internal-secret"];
 
     if (internalSecret !== process.env.CAMPUSX_INTERNAL_API_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({
+        ok: false,
+        error: "Unauthorized",
+      });
     }
 
     const {
@@ -38,27 +68,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       title,
       body,
       url = "/",
-    } = req.body as {
-      token?: string;
-      title?: string;
-      body?: string;
-      url?: string;
-    };
+      dryRun = false,
+    } = req.body as PushBody;
 
     if (!token || !title || !body) {
       return res.status(400).json({
+        ok: false,
         error: "token, title, and body are required",
       });
     }
 
     getFirebaseAdminApp();
 
-    const messageId = await admin.messaging().send({
+    const targetUrl = normalizeUrl(url);
+
+    const message: admin.messaging.Message = {
       token,
       data: {
         title,
         body,
-        url,
+        url: targetUrl,
+        sentAt: String(Date.now()),
       },
       webpush: {
         headers: {
@@ -66,31 +96,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           TTL: "86400",
         },
         fcmOptions: {
-          link: url,
+          link: targetUrl,
         },
         notification: {
           title,
           body,
           icon: "/icons/icon-192.png",
           badge: "/icons/icon-192.png",
-          tag: "campusx-message",
-          requireInteraction: false,
+          tag: `campusx-${Date.now()}`,
+          renotify: true,
+          requireInteraction: true,
           data: {
-            url,
+            url: targetUrl,
           },
         },
       },
-    });
+    };
+
+    const messageId = await admin.messaging().send(message, dryRun);
 
     return res.status(200).json({
       ok: true,
+      dryRun,
       messageId,
+      tokenPreview: getTokenPreview(token),
     });
-  } catch (error) {
-    console.error("send-push failed:", error);
+  } catch (error: any) {
+    console.error("send-push failed:", {
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+    });
 
     return res.status(500).json({
-      error: error instanceof Error ? error.message : "Push send failed",
+      ok: false,
+      code: error?.code || "unknown",
+      error: error?.message || "Push send failed",
     });
   }
 }

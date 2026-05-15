@@ -14,6 +14,9 @@ export interface ForegroundPushPayload {
   url?: string;
 }
 
+const FIREBASE_MESSAGING_SW_PATH = "/firebase-messaging-sw.js";
+const FIREBASE_MESSAGING_SW_SCOPE = "/firebase-cloud-messaging-push-scope/";
+
 const REQUIRED_ENV_KEYS = [
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
@@ -59,7 +62,7 @@ function buildServiceWorkerUrl() {
     appId: getEnvValue("VITE_FIREBASE_APP_ID") || "",
   });
 
-  return `/firebase-messaging-sw.js?${params.toString()}`;
+  return `${FIREBASE_MESSAGING_SW_PATH}?${params.toString()}`;
 }
 
 export async function isPushSupported() {
@@ -71,11 +74,31 @@ export async function isPushSupported() {
   return isSupported();
 }
 
+async function registerFirebaseMessagingServiceWorker() {
+  const swUrl = buildServiceWorkerUrl();
+
+  try {
+    const registration = await navigator.serviceWorker.register(swUrl, {
+      scope: FIREBASE_MESSAGING_SW_SCOPE,
+    });
+
+    await navigator.serviceWorker.ready;
+
+    return registration;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Service worker registration failed: ${msg}. Ensure ${FIREBASE_MESSAGING_SW_PATH} is reachable and not blocked by your hosting (CORS or 404).`
+    );
+  }
+}
+
 export async function requestPushPermissionAndToken(): Promise<{
   token: string;
   permission: NotificationPermission | "unsupported";
 }> {
   assertPushEnvReady();
+  assertNoPlaceholderValues();
 
   const supported = await isPushSupported();
 
@@ -95,19 +118,33 @@ export async function requestPushPermissionAndToken(): Promise<{
     };
   }
 
-  const swRegistration = await navigator.serviceWorker.register(
-    buildServiceWorkerUrl()
-  );
-
-  await navigator.serviceWorker.ready;
+  const serviceWorkerRegistration = await registerFirebaseMessagingServiceWorker();
 
   const messaging = getMessaging(app);
   const vapidKey = getEnvValue("VITE_FIREBASE_VAPID_KEY");
 
-  const token = await getToken(messaging, {
-    vapidKey,
-    serviceWorkerRegistration: swRegistration,
-  });
+  let token = "";
+
+  try {
+    token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration,
+    });
+  } catch (err) {
+    const sdkMessage = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Messaging: A problem occurred while subscribing the user to FCM: ${sdkMessage}. Ensure your VITE_FIREBASE_* env vars (including VITE_FIREBASE_VAPID_KEY) are configured for your deployment.`
+    );
+  }
+
+  const pushSubscription =
+    await serviceWorkerRegistration.pushManager.getSubscription();
+
+  if (!pushSubscription) {
+    throw new Error(
+      "FCM token generated but browser push subscription is missing. Clear site data and retry."
+    );
+  }
 
   return {
     token,
@@ -147,4 +184,26 @@ export async function listenForForegroundMessages(
       url: payload.data?.url || "/",
     });
   });
+}
+
+const PLACEHOLDER_PATTERNS = [
+  /YOUR_FIREBASE_API_KEY/i,
+  /your-app-id/i,
+  /your-project(?:-| )?id/i,
+  /your-project\.firebaseapp\.com/i,
+  /your-project\.appspot\.com/i,
+];
+
+function assertNoPlaceholderValues() {
+  const bad = REQUIRED_ENV_KEYS.filter((k) => {
+    const v = getEnvValue(k);
+    if (!v) return false;
+    return PLACEHOLDER_PATTERNS.some((rx) => rx.test(v));
+  });
+
+  if (bad.length > 0) {
+    throw new Error(
+      `Push env values appear to be placeholders: ${bad.join(", ")}. Replace with your Firebase project values (Vercel env vars).`
+    );
+  }
 }
