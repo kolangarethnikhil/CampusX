@@ -49,7 +49,13 @@ export async function getMySavedPosts(): Promise<SavedPostItem[]> {
 
         const listingSnap = await getDoc(doc(db, collectionName, data.listingId));
 
-        if (!listingSnap.exists()) return null;
+        if (!listingSnap.exists()) {
+  return {
+    saveId: savedDoc.id,
+    listingType: data.listingType,
+    listing: null,
+  };
+}
 
         return {
           saveId: savedDoc.id,

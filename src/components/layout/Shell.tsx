@@ -2244,7 +2244,7 @@ export default function Shell() {
     </div>
   );
 }
-import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedService";
+import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedCrudService";
 import {
   Conversation,
   Message,
