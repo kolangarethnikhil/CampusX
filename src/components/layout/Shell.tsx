@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import LottiePlayer from "../../components/ui/LottiePlayer";
-import homeLoading from "../../assets/lottie/home-loading.json";
+import homeLoadingRaw from "../../assets/lottie/home-empty?raw";
 import {
   ArrowLeft,
   Bookmark,
@@ -19,7 +19,39 @@ import {
   X,
 } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";
+import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedCrudService";
+import {
+  Conversation,
+  Message,
+  getConversationListingSnapshot,
+  getMessageVisualStatus,
+  getUnreadCount,
+  markConversationDelivered,
+  markConversationSeen,
+  sendMessage,
+  startConversation,
+  subscribeToConversations,
+  subscribeToMessages,
+} from "../../services/chatService";
+import MessageStatusDots from "../features/MessageStatusDots";
+import { blockUser, getBlockedUserIds } from "../../services/blockService";
+import { getHousingLocationDisplay } from "../../utils/listingDisplay";
+import {
+  getListingExpiryLabel,
+  isListingExpired,
+  isPublicListingVisible,
+} from "../../utils/listingLifecycle";
+import {
+  trackChatStarted,
+  trackListingView,
+} from "../../services/listingViewsService";
 
+import ListingForm from "../features/ListingForm";
+import VerificationModal from "../features/VerificationModal";
+import ListingDetailModal from "../features/ListingDetailModal";
+import UserProfilePreview from "../features/UserProfilePreview";
+import HousingMapView from "../features/HousingMapView";
+import ReportListingModal from "../features/ReportListingModal";
 import { useAuth } from "../../contexts/AuthContext.tsx";
 import { db } from "../../lib/firebase";
 import {
@@ -56,6 +88,8 @@ import {
   ForegroundPushPayload,
   listenForForegroundMessages,
 } from "../../services/pushNotificationService.ts";
+
+const homeLoading = JSON.parse(homeLoadingRaw);
 
 type Tab = "home" | "search" | "inbox" | "me";
 type ListingType = "housing" | "market";
@@ -2443,36 +2477,3 @@ setMyMarketData(
     </div>
   );
 }
-import { checkIsSaved, saveListing, unsaveListing } from "../../services/savedCrudService";
-import {
-  Conversation,
-  Message,
-  getConversationListingSnapshot,
-  getMessageVisualStatus,
-  getUnreadCount,
-  markConversationDelivered,
-  markConversationSeen,
-  sendMessage,
-  startConversation,
-  subscribeToConversations,
-  subscribeToMessages,
-} from "../../services/chatService";
-import MessageStatusDots from "../features/MessageStatusDots";
-import { blockUser, getBlockedUserIds } from "../../services/blockService";
-import { getHousingLocationDisplay } from "../../utils/listingDisplay";
-import {
-  getListingExpiryLabel,
-  isListingExpired,
-  isPublicListingVisible,
-} from "../../utils/listingLifecycle";
-import {
-  trackChatStarted,
-  trackListingView,
-} from "../../services/listingViewsService";
-
-import ListingForm from "../features/ListingForm";
-import VerificationModal from "../features/VerificationModal";
-import ListingDetailModal from "../features/ListingDetailModal";
-import UserProfilePreview from "../features/UserProfilePreview";
-import HousingMapView from "../features/HousingMapView";
-import ReportListingModal from "../features/ReportListingModal";
