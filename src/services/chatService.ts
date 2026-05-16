@@ -2,7 +2,9 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -50,6 +52,8 @@ export interface Conversation {
   lastMessageSenderId?: string;
   lastMessageAt?: unknown;
 
+  unreadBy?: Record<string, number>;
+
   lastDeliveredAtBy?: Record<string, unknown>;
   lastReadAtBy?: Record<string, unknown>;
 
@@ -93,30 +97,29 @@ function getParticipantsKey(participants: string[]) {
   return [...participants].sort().join("__");
 }
 
+function getOtherParticipant(conversation: Conversation, currentUserId: string) {
+  return conversation.participants.find((id) => id !== currentUserId);
+}
+
 async function notifyReceiver(conversationId: string, message: string) {
   const user = auth.currentUser;
 
   if (!user) return;
 
   try {
-    const token = await user.getIdToken();
+    const idToken = await user.getIdToken();
 
-    const response = await fetch("/api/notify-message", {
+    await fetch("/api/notify-message", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${idToken}`,
       },
       body: JSON.stringify({
         conversationId,
         message,
       }),
     });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("notifyReceiver failed:", text);
-    }
   } catch (error) {
     console.error("notifyReceiver failed:", error);
   }
@@ -163,16 +166,15 @@ export async function startConversation(
     const normalizedListingType: ListingType =
       listingType === "housing" ? "housing" : "market";
 
-    const listingSnapshot: ListingSnapshot = {
+    const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
       id: listingId,
       type: normalizedListingType,
       title: listingTitle,
-      ...(typeof metadata?.listingPrice === "number"
-        ? { price: metadata.listingPrice }
-        : {}),
-      ...(metadata?.listingPhoto ? { photo: metadata.listingPhoto } : {}),
-      ...(metadata?.listingLocation ? { location: metadata.listingLocation } : {}),
-      ...(metadata?.listingStatus ? { statusAtStart: metadata.listingStatus } : {}),
+      price: metadata?.listingPrice,
+      photo: metadata?.listingPhoto,
+      location: metadata?.listingLocation,
+      statusAtStart: metadata?.listingStatus,
+      createdAt: serverTimestamp(),
     };
 
     await setDoc(conversationRef, {
@@ -185,14 +187,19 @@ export async function startConversation(
 
       listingSnapshot,
 
-      listingPhoto: metadata?.listingPhoto || "",
-      listingPrice: metadata?.listingPrice || 0,
-      listingStatus: metadata?.listingStatus || "",
-      listingLocation: metadata?.listingLocation || "",
+      listingPhoto: metadata?.listingPhoto || listingSnapshot.photo || "",
+      listingPrice: metadata?.listingPrice || listingSnapshot.price || 0,
+      listingStatus: metadata?.listingStatus || listingSnapshot.statusAtStart || "",
+      listingLocation: metadata?.listingLocation || listingSnapshot.location || "",
 
       lastMessage: "",
       lastMessageSenderId: "",
       lastMessageAt: null,
+
+      unreadBy: {
+        [currentUserId]: 0,
+        [ownerId]: 0,
+      },
 
       lastDeliveredAtBy: {},
       lastReadAtBy: {},
@@ -204,6 +211,7 @@ export async function startConversation(
     return conversationRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, COLLECTION_NAME);
+    throw error;
   }
 }
 
@@ -277,6 +285,17 @@ export async function sendMessage(
   if (!trimmed) return;
 
   try {
+    const conversationRef = doc(db, COLLECTION_NAME, conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+
+    const conversation = conversationSnap.exists()
+      ? ({ id: conversationSnap.id, ...conversationSnap.data() } as Conversation)
+      : null;
+
+    const receiverId = conversation
+      ? getOtherParticipant(conversation, currentUserId)
+      : null;
+
     await addDoc(collection(db, COLLECTION_NAME, conversationId, "messages"), {
       senderId: currentUserId,
       content: trimmed,
@@ -287,12 +306,19 @@ export async function sendMessage(
       createdAt: serverTimestamp(),
     });
 
-    await updateDoc(doc(db, COLLECTION_NAME, conversationId), {
+    const updatePayload: Record<string, unknown> = {
       lastMessage: trimmed,
       lastMessageSenderId: currentUserId,
       lastMessageAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+
+    if (receiverId) {
+      updatePayload[`unreadBy.${receiverId}`] = increment(1);
+      updatePayload[`unreadBy.${currentUserId}`] = 0;
+    }
+
+    await updateDoc(conversationRef, updatePayload);
 
     void notifyReceiver(conversationId, trimmed);
   } catch (error) {
@@ -324,6 +350,7 @@ export async function markConversationSeen(conversationId: string) {
     await updateDoc(doc(db, COLLECTION_NAME, conversationId), {
       [`lastDeliveredAtBy.${currentUserId}`]: serverTimestamp(),
       [`lastReadAtBy.${currentUserId}`]: serverTimestamp(),
+      [`unreadBy.${currentUserId}`]: 0,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
@@ -356,7 +383,9 @@ export function getMessageVisualStatus(
   if (!currentUserId) return "sent";
   if (message.senderId !== currentUserId) return "seen";
 
-  const otherUserId = conversation.participants.find((id) => id !== currentUserId);
+  const otherUserId = conversation.participants.find(
+    (id) => id !== currentUserId
+  );
 
   if (!otherUserId) return "sent";
 
@@ -364,4 +393,13 @@ export function getMessageVisualStatus(
   if (conversation.lastDeliveredAtBy?.[otherUserId]) return "delivered";
 
   return message.status || "sent";
+}
+
+export function getUnreadCount(
+  conversation: Conversation,
+  userId?: string | null
+) {
+  if (!userId) return 0;
+
+  return Number(conversation.unreadBy?.[userId] || 0);
 }

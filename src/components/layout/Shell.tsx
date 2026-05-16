@@ -1217,6 +1217,15 @@ function Chattery({
     [blockedUserIds, conversations, user?.uid]
   );
 
+  const totalUnread = useMemo(
+    () =>
+      visibleConversations.reduce(
+        (sum, conversation) => sum + getUnreadCount(conversation, user?.uid),
+        0
+      ),
+    [visibleConversations, user?.uid]
+  );
+
   useEffect(() => {
     if (!openConversationId) return;
 
@@ -1242,11 +1251,24 @@ function Chattery({
     if (!selectedChat) return;
 
     const unsubscribe = subscribeToMessages(selectedChat.id, setMessages);
+
     void markConversationDelivered(selectedChat.id);
     void markConversationSeen(selectedChat.id);
 
     return unsubscribe;
   }, [selectedChat?.id]);
+
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    const latest = conversations.find(
+      (conversation) => conversation.id === selectedChat.id
+    );
+
+    if (latest) {
+      setSelectedChat(latest);
+    }
+  }, [conversations, selectedChat?.id]);
 
   useEffect(() => {
     if (!selectedChat) return;
@@ -1257,6 +1279,12 @@ function Chattery({
       setSelectedChat(null);
     }
   }, [blockedUserIds, selectedChat, user?.uid]);
+
+  const openChat = (conversation: Conversation) => {
+    setSelectedChat(conversation);
+    void markConversationDelivered(conversation.id);
+    void markConversationSeen(conversation.id);
+  };
 
   const handleSend = async () => {
     if (!input.trim() || !selectedChat) return;
@@ -1277,11 +1305,11 @@ function Chattery({
 
     return (
       <div className="fixed inset-0 z-[120] flex flex-col bg-black">
-        <header className="flex items-center gap-4 border-b border-white/10 bg-black p-5">
+        <header className="flex items-center gap-4 border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setSelectedChat(null)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 transition active:scale-[0.97]"
           >
             <ArrowLeft size={22} />
           </button>
@@ -1289,19 +1317,25 @@ function Chattery({
           <button
             type="button"
             onClick={() => otherUserId && onOpenUserProfile(otherUserId)}
-            className="flex min-w-0 items-center gap-3 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+            className="flex min-w-0 flex-1 items-center gap-3 text-left transition active:scale-[0.98]"
           >
-            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl bg-white/5">
+            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-white/5">
               {otherUser?.photoURL ? (
-                <img src={otherUser.photoURL} alt={name} className="h-full w-full object-cover" />
+                <img
+                  src={otherUser.photoURL}
+                  alt={name}
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-kjc-accent">
+                <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-lg font-black text-kjc-accent">
                   {name.charAt(0).toUpperCase()}
                 </div>
               )}
+
+              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-black bg-emerald-400" />
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="truncate text-xl pro-heading">{name}</h3>
               <p className="truncate text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
                 Regarding: {snapshot.title}
@@ -1314,7 +1348,7 @@ function Chattery({
           <button
             type="button"
             onClick={() => onOpenListing?.(selectedChat)}
-            className="flex w-full items-center gap-4 rounded-[26px] border border-white/5 bg-white/5 p-4 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+            className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.05] p-4 text-left transition active:scale-[0.98]"
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5">
               {snapshot.photo ? (
@@ -1354,41 +1388,59 @@ function Chattery({
           </button>
         </div>
 
-        <div className="flex-1 space-y-7 overflow-y-auto p-6">
-          {messages.map((message) => {
-            const isMe = message.senderId === user?.uid;
-            const visualStatus = getMessageVisualStatus(
-              message,
-              selectedChat,
-              user?.uid
-            );
-
-            return (
-              <div key={message.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[85%] rounded-[28px] px-6 py-4 text-sm ${
-                    isMe ? "bg-kjc-accent text-white" : "bg-white/5 text-white/85"
-                  }`}
-                >
-                  <p>{message.content}</p>
-
-                  {isMe && (
-                    <div className="mt-2 flex justify-end">
-                      <MessageStatusDots status={visualStatus} />
-                    </div>
-                  )}
-                </div>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-6">
+          {messages.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/5 text-3xl">
+                💬
               </div>
-            );
-          })}
+
+              <h3 className="text-2xl pro-heading">Start the conversation</h3>
+              <p className="mt-2 max-w-xs text-xs font-bold leading-relaxed text-white/35">
+                Ask about availability, location, price, or pickup details.
+              </p>
+            </div>
+          ) : (
+            messages.map((message) => {
+              const isMe = message.senderId === user?.uid;
+              const visualStatus = getMessageVisualStatus(
+                message,
+                selectedChat,
+                user?.uid
+              );
+
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[82%] rounded-[26px] px-5 py-3 text-sm leading-relaxed shadow-sm ${
+                      isMe
+                        ? "rounded-br-md bg-kjc-accent text-white"
+                        : "rounded-bl-md border border-white/10 bg-white/[0.06] text-white/85"
+                    }`}
+                  >
+                    <p>{message.content}</p>
+
+                    {isMe && (
+                      <div className="mt-2 flex justify-end">
+                        <MessageStatusDots status={visualStatus} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
-        <div className="flex gap-4 border-t border-white/10 p-6">
+        <div className="flex gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Type a message..."
-            className="input-pro flex-1"
+            className="input-pro min-w-0 flex-1"
             onKeyDown={(event) => {
               if (event.key === "Enter") void handleSend();
             }}
@@ -1397,9 +1449,10 @@ function Chattery({
           <button
             type="button"
             onClick={handleSend}
-            className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
+            disabled={!input.trim()}
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-kjc-accent transition active:scale-[0.97] disabled:opacity-40"
           >
-            <Send size={24} />
+            <Send size={22} />
           </button>
         </div>
       </div>
@@ -1407,31 +1460,60 @@ function Chattery({
   }
 
   return (
-    <div className="space-y-10">
-      <h2 className="text-4xl pro-heading tracking-tighter">Inbox</h2>
+    <div className="space-y-7">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-4xl pro-heading tracking-tighter">Inbox</h2>
+          <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+            {totalUnread > 0
+              ? `${totalUnread} unread message${totalUnread > 1 ? "s" : ""}`
+              : "Your CampusX conversations"}
+          </p>
+        </div>
+
+        {totalUnread > 0 && (
+          <div className="rounded-full bg-kjc-accent px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-[0_0_24px_rgba(139,92,246,0.35)]">
+            New
+          </div>
+        )}
+      </div>
 
       {visibleConversations.length === 0 ? (
-        <div className="rounded-[48px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
+        <div className="rounded-[42px] border border-dashed border-white/10 bg-white/[0.04] px-8 py-20 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/5 text-3xl">
+            💬
+          </div>
           <h2 className="text-2xl pro-heading">No chats yet</h2>
+          <p className="mx-auto mt-2 max-w-xs text-xs font-bold leading-relaxed text-white/35">
+            Ping a listing owner to start a conversation. Your chats will appear
+            here.
+          </p>
         </div>
       ) : (
-        <div className="grid gap-5">
+        <div className="grid gap-4">
           {visibleConversations.map((conversation) => {
             const otherUserId = getOtherUserId(conversation);
             const otherUser = otherUserId ? userMap[otherUserId] : null;
             const name = otherUser?.displayName || "CampusX user";
             const snapshot = getConversationListingSnapshot(conversation);
+            const unreadCount = getUnreadCount(conversation, user?.uid);
+            const hasUnread = unreadCount > 0;
+            const isMine = conversation.lastMessageSenderId === user?.uid;
 
             return (
               <div
                 key={conversation.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelectedChat(conversation)}
+                onClick={() => openChat(conversation)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") setSelectedChat(conversation);
+                  if (event.key === "Enter") openChat(conversation);
                 }}
-                className="flex w-full cursor-pointer items-center gap-5 rounded-[40px] border border-white/5 bg-white/5 p-6 text-left transition-transform duration-150 ease-out active:scale-[0.98]"
+                className={`relative flex w-full cursor-pointer items-center gap-4 rounded-[32px] border p-4 text-left transition-all duration-200 active:scale-[0.985] ${
+                  hasUnread
+                    ? "border-kjc-accent/45 bg-kjc-accent/[0.12] shadow-[0_0_28px_rgba(139,92,246,0.16)]"
+                    : "border-white/10 bg-white/[0.045]"
+                }`}
               >
                 <button
                   type="button"
@@ -1439,24 +1521,58 @@ function Chattery({
                     event.stopPropagation();
                     if (otherUserId) onOpenUserProfile(otherUserId);
                   }}
-                  className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5 transition active:scale-[0.97]"
                 >
                   {otherUser?.photoURL ? (
-                    <img src={otherUser.photoURL} alt={name} className="h-full w-full object-cover" />
+                    <img
+                      src={otherUser.photoURL}
+                      alt={name}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-kjc-accent">
+                    <div className="flex h-full w-full items-center justify-center bg-kjc-accent/15 text-lg font-black text-kjc-accent">
                       {name.charAt(0).toUpperCase()}
                     </div>
+                  )}
+
+                  {hasUnread && (
+                    <span className="absolute right-0 top-0 h-3.5 w-3.5 rounded-full border-2 border-black bg-kjc-accent" />
                   )}
                 </button>
 
                 <div className="min-w-0 flex-1">
-                  <h4 className="truncate text-xl pro-heading">{name}</h4>
-                  <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4
+                      className={`truncate text-lg ${
+                        hasUnread
+                          ? "font-black text-white"
+                          : "pro-heading text-white"
+                      }`}
+                    >
+                      {name}
+                    </h4>
+
+                    {hasUnread && (
+                      <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-kjc-accent px-2 text-[10px] font-black text-white">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-1 truncate text-[9px] font-black uppercase tracking-[0.16em] text-white/35">
                     Regarding: {snapshot.title}
                   </p>
-                  <p className="mt-1 truncate text-[11px] font-bold text-white/45">
-                    {conversation.lastMessage || "Start chatting..."}
+
+                  <p
+                    className={`mt-1 truncate text-xs ${
+                      hasUnread
+                        ? "font-black text-white"
+                        : "font-bold text-white/45"
+                    }`}
+                  >
+                    {conversation.lastMessage
+                      ? `${isMine ? "You: " : ""}${conversation.lastMessage}`
+                      : "Start chatting..."}
                   </p>
                 </div>
               </div>
@@ -1467,7 +1583,6 @@ function Chattery({
     </div>
   );
 }
-
 export default function Shell() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2250,6 +2365,7 @@ import {
   Message,
   getConversationListingSnapshot,
   getMessageVisualStatus,
+  getUnreadCount,
   markConversationDelivered,
   markConversationSeen,
   sendMessage,
