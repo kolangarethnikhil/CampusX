@@ -42,6 +42,7 @@ import {
   renewMarketListing,
   reopenMarketListing,
 } from "../../services/marketService";
+
 import ProfileCompletionModal from "../features/ProfileCompletionModal";
 import AppFeedbackModal from "../features/AppFeedbackModal";
 import NotificationPreferencesModal from "../features/NotificationPreferencesModal";
@@ -259,10 +260,12 @@ function BottomNav({
   activeTab,
   onTabChange,
   onAddClick,
+  bottomUnreadCount,
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   onAddClick: () => void | Promise<void>;
+  bottomUnreadCount?: number;
 }) {
   const tabs = [
     { id: "home", icon: Home, label: "Home" },
@@ -293,7 +296,18 @@ function BottomNav({
           }`}
           aria-label={tab.label}
         >
-          <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
+          {tab.id === "inbox" ? (
+            <div className="relative">
+              <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
+              {bottomUnreadCount && bottomUnreadCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-kjc-accent px-1.5 text-[10px] font-black text-white shadow-[0_0_18px_rgba(139,92,246,0.65)]">
+                  {bottomUnreadCount > 9 ? "9+" : bottomUnreadCount}
+                </span>
+              )}
+            </div>
+          ) : (
+            <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
+          )}
 
           {activeTab === tab.id && !tab.special && (
             <motion.div
@@ -1612,6 +1626,7 @@ export default function Shell() {
   const [showFilters, setShowFilters] = useState(false);
   const [housingFilters, setHousingFilters] = useState<HousingFilters>(initialHousingFilters);
   const [loading, setLoading] = useState(true);
+  const [bottomUnreadCount, setBottomUnreadCount] = useState(0);
 
   const [selectedListing, setSelectedListing] = useState<HousingListing | MarketListing | null>(null);
   const [selectedListingType, setSelectedListingType] = useState<ListingType>("housing");
@@ -1626,6 +1641,24 @@ export default function Shell() {
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
   const { user, profile, profileCompleted, signIn, logout } = useAuth();
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setBottomUnreadCount(0);
+      return;
+    }
+
+    const unsubscribe = subscribeToConversations((items: Conversation[]) => {
+      const count = items.reduce(
+        (sum, conversation) => sum + getUnreadCount(conversation, user.uid),
+        0
+      );
+
+      setBottomUnreadCount(count);
+    });
+
+    return unsubscribe;
+  }, [user?.uid]);
 
   useEffect(() => {
     void loadData();
@@ -2257,6 +2290,7 @@ export default function Shell() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onAddClick={() => requireProfileReady({ kind: "post" })}
+        bottomUnreadCount={bottomUnreadCount}
       />
 
       <HousingFilterModal
