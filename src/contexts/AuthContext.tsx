@@ -130,9 +130,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentUser);
 
         if (!currentUser) {
-          setProfile(null);
-          return;
-        }
+  setProfile(null);
+  setLoading(false); 
+  return;
+}
 
         const email = currentUser.email || "";
         const officialKjcEmail = isOfficialKjcEmail(email);

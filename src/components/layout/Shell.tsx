@@ -1712,7 +1712,7 @@ useEffect(() => {
   const [editingListing, setEditingListing] = useState<HousingListing | MarketListing | null>(null);
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
-  const { user, profile, profileCompleted, signIn, logout } = useAuth();
+  const { user, profile, profileCompleted, signIn, logout, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (!user?.uid) {
@@ -2242,39 +2242,50 @@ setMyMarketData(
               />
             )}
 
-            {activeTab === "inbox" &&
-              (!user ? (
-                <div className="py-24 text-center">
-                  <button
-                    type="button"
-                    onClick={signIn}
-                    className="rounded-[30px] bg-white px-8 py-5 text-black transition-transform duration-150 ease-out active:scale-[0.97]"
-                  >
-                    Sign in to view inbox
-                  </button>
-                </div>
-              ) : (
-                <Chattery
-                  onOpenUserProfile={openUserProfile}
-                  openConversationId={chatToOpenId}
-                  onConversationOpened={() => setChatToOpenId(null)}
-                  onOpenListing={openOriginalListingFromConversation}
-                  blockedUserIds={blockedUserIds}
-                />
-              ))}
+            
+{activeTab === "inbox" &&
+  (authLoading ? (
+    <div className="flex items-center justify-center py-24">
+      <LottiePlayer animation={homeLoading} className="w-40 h-40" />
+    </div>
+  ) : !user ? (
+    <div className="py-24 text-center">
+      <button
+        type="button"
+        onClick={signIn}
+        className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
+      >
+        Sign in to view inbox
+      </button>
+    </div>
+  ) : (
+    <Chattery
+      onOpenUserProfile={openUserProfile}
+      openConversationId={chatToOpenId}
+      onConversationOpened={() => setChatToOpenId(null)}
+      onOpenListing={openOriginalListingFromConversation}
+      blockedUserIds={blockedUserIds}
+    />
+  ))}
+
 
             {activeTab === "me" &&
-              (!user ? (
-                <div className="py-24 text-center">
-                  <button
-                    type="button"
-                    onClick={signIn}
-                    className="rounded-[30px] bg-white px-8 py-5 text-black transition-transform duration-150 ease-out active:scale-[0.97]"
-                  >
-                    Sign in to view profile
-                  </button>
-                </div>
-              ) : (
+  (authLoading ? (
+    <div className="flex items-center justify-center py-24">
+      <LottiePlayer animation={homeLoading} className="w-40 h-40" />
+    </div>
+  ) : !user ? (
+    <div className="py-24 text-center">
+      <button
+        type="button"
+        onClick={signIn}
+        className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
+      >
+        Sign in to view profile
+      </button>
+    </div>
+  ) : (
+    // ✅ keep your existing profile UI here
                 <div className="space-y-10">
                   <div className="rounded-[44px] border border-white/10 bg-white/5 p-9 text-center">
                     <div className="mx-auto mb-6 h-28 w-28 overflow-hidden rounded-[40px] bg-white/5">
