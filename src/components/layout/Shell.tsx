@@ -1673,7 +1673,13 @@ function Chattery({
   );
 }
 export default function Shell() {
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+  const saved = localStorage.getItem("campusx_active_tab");
+  return (saved as Tab) || "home";
+});
+useEffect(() => {
+  localStorage.setItem("campusx_active_tab", activeTab);
+}, [activeTab]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [profileGateOpen, setProfileGateOpen] = useState(false);
