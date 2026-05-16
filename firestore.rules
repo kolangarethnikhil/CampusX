@@ -57,22 +57,31 @@ service cloud.firestore {
       }
 
       function validOptionalProfileFields() {
-        return
-          (!('gender' in incoming()) ||
-            incoming().gender in ['male', 'female', 'prefer_not_to_say'])
-          &&
-          (!('discoverySource' in incoming()) ||
-            incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other'])
-          &&
- ||          (!('communityIntent' in incoming()) ||
-            incoming().emailNotifications is bool)
-          &&
-          (!('fcmToken' in incoming()) ||
-            incoming().fcmToken is string)
-          &&
-          (!('pushPermission' in incoming()) ||
-            incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']);
-      }
+  return
+    (!('gender' in incoming()) ||
+      incoming().gender in ['male', 'female', 'prefer_not_to_say'])
+    &&
+    (!('discoverySource' in incoming()) ||
+      incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other'])
+    &&
+    (!('communityIntent' in incoming()) ||
+      incoming().communityIntent in ['explore', 'utility', 'business', 'other'])
+    &&
+    (!('notificationsEnabled' in incoming()) ||
+      incoming().notificationsEnabled is bool)
+    &&
+    (!('marketingOptIn' in incoming()) ||
+      incoming().marketingOptIn is bool)
+    &&
+    (!('emailNotifications' in incoming()) ||
+      incoming().emailNotifications is bool)
+    &&
+    (!('fcmToken' in incoming()) ||
+      incoming().fcmToken is string)
+    &&
+    (!('pushPermission' in incoming()) ||
+      incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']);
+}
 
       allow create: if isOwner(userId)
         && incoming().uid == request.auth.uid
@@ -141,20 +150,14 @@ service cloud.firestore {
       allow delete: if false;
 
       match /push_tokens/{tokenId} {
-        allow get, list: if isOwner(userId);
+  allow get, list: if isOwner(userId);
 
-        allow create, update: if isOwner(userId)
-          && incoming().userId == request.auth.uid
-          && incoming().token is string
-          && incoming().tokenHash is string
-          && incoming().enabled is bool
-          && incoming().platform == 'web'
-          && incoming().deviceLabel is string
-          && incoming().userAgent is string
-          && incoming().permission in ['default', 'denied', 'granted', 'unsupported'];
+  allow create, update: if isOwner(userId)
+    && incoming().userId == request.auth.uid
+    && incoming().token is string;
 
-        allow delete: if isOwner(userId);
-      }
+  allow delete: if isOwner(userId);
+}
     }
 
     match /housing_listings/{listingId} {
