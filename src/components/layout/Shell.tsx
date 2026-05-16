@@ -1857,10 +1857,14 @@ export default function Shell() {
 
     try {
       if (type === "housing") {
-        await deleteHousingListing(listing.id);
-      } else {
-        await deleteMarketListing(listing.id);
-      }
+  await updateHousingListing(listing.id, {
+    status: "deleted",
+  });
+} else {
+  await updateMarketListing(listing.id, {
+    status: "deleted",
+  });
+}
 
       closeListingDetail();
       await loadData();
@@ -1944,9 +1948,6 @@ export default function Shell() {
   if (!user || listing.postedBy !== user.uid) return;
 
   try {
-    await markMarketListingSold(listing.id);
-
-    // ✅ also mark as deleted for UI behavior
     await updateMarketListing(listing.id, {
       status: "sold",
     });
@@ -1955,6 +1956,7 @@ export default function Shell() {
     await loadData();
   } catch (error) {
     console.error(error);
+    alert("Could not mark as sold");
   }
 };
 

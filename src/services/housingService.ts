@@ -117,7 +117,6 @@ export async function getHousingListings(filters?: {
   try {
     let q = query(
   collection(db, COLLECTION_NAME),
-  where("status", "==", "available"),
   orderBy("createdAt", "desc")
 );
 
