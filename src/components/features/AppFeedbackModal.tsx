@@ -71,36 +71,38 @@ export default function AppFeedbackModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[230] flex items-end justify-center p-4 sm:items-center">
+    <div className="fixed inset-0 z-[230] overflow-y-auto bg-black/85 px-4 py-6 sm:flex sm:items-center sm:justify-center">
       <button
         type="button"
         onClick={onClose}
-        className="absolute inset-0 bg-black/85"
+        className="fixed inset-0 z-[231] cursor-default"
+        aria-label="Close modal backdrop"
       />
 
-      <div className="relative w-full max-w-lg rounded-t-[44px] border border-white/10 bg-black p-8 shadow-pro-lg sm:rounded-[44px]">
-        <div className="mb-7 flex items-start justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.28em] text-kjc-accent">
-              CampusX
-            </p>
-            <h2 className="mt-2 text-4xl pro-heading tracking-tighter">
-              {isIssue ? "Report issue" : "Rate app"}
-            </h2>
-            <p className="mt-2 text-xs font-bold leading-relaxed text-white/40">
-              {isIssue
-                ? "Tell us what broke so we can fix it faster."
-                : "Help us improve CampusX for KJU students."}
-            </p>
-          </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="fixed right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-[260] flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white/70 shadow-2xl backdrop-blur-xl transition active:scale-95"
+        aria-label={isIssue ? "Close report issue" : "Close feedback"}
+      >
+        <X size={22} />
+      </button>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-white/45"
-          >
-            <X size={22} />
-          </button>
+      <div className="relative z-[240] mx-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-[36px] border border-white/10 bg-black p-6 pb-[calc(2rem+env(safe-area-inset-bottom))] shadow-pro-lg sm:rounded-[44px] sm:p-8">
+        <div className="mb-7 pr-12">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-kjc-accent">
+            CampusX
+          </p>
+
+          <h2 className="mt-2 text-4xl pro-heading tracking-tighter">
+            {isIssue ? "Report issue" : "Rate app"}
+          </h2>
+
+          <p className="mt-2 text-xs font-bold leading-relaxed text-white/40">
+            {isIssue
+              ? "Tell us what broke so we can fix it faster."
+              : "Help us improve CampusX for KJU students."}
+          </p>
         </div>
 
         <div className="space-y-6">
@@ -140,6 +142,7 @@ export default function AppFeedbackModal({
                     type="button"
                     onClick={() => setRating(value)}
                     className="transition-transform duration-150 ease-out active:scale-[0.9]"
+                    aria-label={`Rate ${value} stars`}
                   >
                     <Star
                       size={30}
@@ -173,6 +176,7 @@ export default function AppFeedbackModal({
           {isIssue && (
             <div className="flex gap-3 rounded-[24px] border border-amber-500/15 bg-amber-500/10 p-4 text-amber-200">
               <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+
               <p className="text-xs font-bold leading-relaxed text-white/55">
                 For unsafe listings, use the listing report button. This section is for app bugs.
               </p>
