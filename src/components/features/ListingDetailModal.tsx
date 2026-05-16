@@ -123,7 +123,7 @@ export default function ListingDetailModal({
 
   const price = isHousing ? housing.rent : market.price;
   const status = listing.status || "available";
-  const isClosed = status === "closed" || status === "sold";
+  const isClosed = status === "sold" || status === "deleted";
   const hasMultiplePhotos = photos.length > 1;
   const activePhoto = photos[activePhotoIndex];
 
@@ -332,6 +332,15 @@ export default function ListingDetailModal({
               <p className="text-sm font-bold leading-relaxed text-white/80">
                 {location.address}
               </p>
+              {listing.latitude && listing.longitude && (
+  <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+    <iframe
+      src={`https://www.google.com/maps?q=${listing.latitude},${listing.longitude}&z=15&output=embed`}
+      className="h-48 w-full"
+      loading="lazy"
+    />
+  </div>
+)}
 
               {location.distance && (
                 <p className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40">
@@ -499,24 +508,7 @@ export default function ListingDetailModal({
                 </button>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {isClosed ? (
-                    <button
-                      type="button"
-                      onClick={() => onReopenListing?.(listing, type)}
-                      className="flex items-center justify-center gap-2 rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400 transition-transform duration-150 ease-out active:scale-[0.97]"
-                    >
-                      Reopen
-                      <RotateCcw size={14} />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onCloseListing?.(listing, type)}
-                      className="rounded-[24px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-white transition-transform duration-150 ease-out active:scale-[0.97]"
-                    >
-                      Close
-                    </button>
-                  )}
+                  
 
                   {!isHousing && status !== "sold" ? (
                     <button
@@ -538,16 +530,7 @@ export default function ListingDetailModal({
                   )}
                 </div>
 
-                {!isHousing && status !== "sold" && (
-                  <button
-                    type="button"
-                    onClick={() => onDelete?.(listing, type)}
-                    className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-rose-500/20 bg-rose-500/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-rose-400 transition-transform duration-150 ease-out active:scale-[0.97]"
-                  >
-                    Delete post
-                    <Trash2 size={14} />
-                  </button>
-                )}
+                
               </div>
             ) : (
               <div className="grid gap-3">

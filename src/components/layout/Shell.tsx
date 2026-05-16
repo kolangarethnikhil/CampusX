@@ -1303,8 +1303,19 @@ function Chattery({
 
   const handleSend = async () => {
   const text = input.trim();
-
   if (!text || !selectedChat) return;
+
+  const snapshot = getConversationListingSnapshot(selectedChat);
+
+  if (snapshot.status === "sold") {
+    alert("This item has already been sold.");
+    return;
+  }
+
+  if (snapshot.status === "deleted") {
+    alert("This listing is no longer available.");
+    return;
+  }
 
   setInput("");
 
@@ -1313,9 +1324,9 @@ function Chattery({
   } catch (error) {
     console.error(error);
     setInput(text);
-    alert("Message could not be sent. Please try again.");
   }
 };
+
 
   if (selectedChat) {
     const otherUserId = getOtherUserId(selectedChat);
@@ -1411,6 +1422,13 @@ function Chattery({
             </div>
           </button>
         </div>
+        {snapshot.status !== "available" && (
+  <div className="mx-4 mb-4 rounded-xl bg-rose-500/10 p-3 text-center text-xs font-black text-rose-400">
+    {snapshot.status === "sold"
+      ? "This item has been sold"
+      : "This listing is no longer available"}
+  </div>
+)}
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-6">
           {messages.length === 0 ? (
@@ -1923,20 +1941,22 @@ export default function Shell() {
   };
 
   const handleMarkSold = async (listing: MarketListing) => {
-    if (!user || listing.postedBy !== user.uid) {
-      alert("You can only update your own post.");
-      return;
-    }
+  if (!user || listing.postedBy !== user.uid) return;
 
-    try {
-      await markMarketListingSold(listing.id);
-      closeListingDetail();
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Could not mark as sold");
-    }
-  };
+  try {
+    await markMarketListingSold(listing.id);
+
+    // ✅ also mark as deleted for UI behavior
+    await updateMarketListing(listing.id, {
+      status: "sold",
+    });
+
+    closeListingDetail();
+    await loadData();
+  } catch (error) {
+    console.error(error);
+  }
+};
 
   const openReportFlow = (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user) return;

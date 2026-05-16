@@ -115,7 +115,11 @@ export async function getHousingListings(filters?: {
   gender?: string;
 }) {
   try {
-    let q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
+    let q = query(
+  collection(db, COLLECTION_NAME),
+  where("status", "==", "available"),
+  orderBy("createdAt", "desc")
+);
 
     if (filters?.roomType && filters.roomType !== "All") {
       q = query(q, where("roomType", "==", filters.roomType));

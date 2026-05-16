@@ -90,7 +90,11 @@ export async function getMarketListings(filters?: {
   category?: string;
 }) {
   try {
-    let q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
+    let q = query(
+  collection(db, COLLECTION_NAME),
+  where("status", "==", "available"),
+  orderBy("createdAt", "desc")
+);
 
     if (filters?.category && filters.category !== "All") {
       q = query(q, where("category", "==", filters.category));
