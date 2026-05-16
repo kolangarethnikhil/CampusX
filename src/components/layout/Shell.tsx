@@ -298,13 +298,14 @@ function BottomNav({
         >
           {tab.id === "inbox" ? (
             <div className="relative">
-              <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
-              {bottomUnreadCount && bottomUnreadCount > 0 && (
-                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-kjc-accent px-1.5 text-[10px] font-black text-white shadow-[0_0_18px_rgba(139,92,246,0.65)]">
-                  {bottomUnreadCount > 9 ? "9+" : bottomUnreadCount}
-                </span>
-              )}
-            </div>
+  <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
+
+  {bottomUnreadCount > 0 && (
+    <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-kjc-accent px-1.5 text-[10px] font-black text-white shadow-[0_0_18px_rgba(139,92,246,0.65)]">
+      {bottomUnreadCount > 9 ? "9+" : bottomUnreadCount}
+    </span>
+  )}
+</div>
           ) : (
             <tab.icon size={tab.special ? 30 : 22} strokeWidth={tab.special ? 2.5 : 2} />
           )}
