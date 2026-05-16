@@ -14,6 +14,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { trackChatStarted } from "../services/listingViewsService";
 import { auth, db, handleFirestoreError, OperationType } from "../lib/firebase";
 
 export type ListingType = "housing" | "market";
@@ -160,12 +161,18 @@ export async function startConversation(
 
       return existingDoc.id;
     }
+    
 
     const conversationRef = doc(collection(db, COLLECTION_NAME));
 
     const normalizedListingType: ListingType =
       listingType === "housing" ? "housing" : "market";
 
+      await trackChatStarted({
+  listingId,
+  listingType: normalizedListingType,
+  listingOwnerId: ownerId,
+});
     const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
       id: listingId,
       type: normalizedListingType,
@@ -368,7 +375,7 @@ export function getConversationListingSnapshot(conversation: Conversation) {
       conversation.listingSnapshot?.location ||
       conversation.listingLocation ||
       "",
-    status:
+    status: 
       conversation.listingStatus ||
       conversation.listingSnapshot?.statusAtStart ||
       "",
