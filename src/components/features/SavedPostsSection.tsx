@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { getMySavedPosts, removeSavedPost } from "../../services/savedPostsService";
+import { getMySavedPosts } from "../../services/savedPostsService";
+import { unsaveListing as removeSavedPost } from "../../services/savedCrudService";
+
 
 export default function SavedPostsSection() {
   const [items, setItems] = useState<any[]>([]);
