@@ -41,16 +41,46 @@ export default function SavedPostsSection({ onOpenDetails }: any) {
       <h3 className="text-xl font-bold text-white">Saved posts</h3>
 
       {loading && (
-        <div className="space-y-2">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-24 bg-white/10 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      )}
+  <div className="flex flex-col items-center justify-center rounded-[32px] border border-white/10 bg-white/[0.04] px-6 py-12 text-center">
+    <div className="relative mb-6 flex h-20 w-20 items-center justify-center">
+      <div className="absolute h-20 w-20 rounded-full border border-kjc-accent/30 animate-ping" />
+      <div className="absolute h-16 w-16 rounded-full bg-kjc-accent/10 blur-xl" />
 
-      {!loading && items.length === 0 && (
-        <p className="text-white/60">No saved posts</p>
-      )}
+      <div className="relative flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/10 text-4xl animate-bounce">
+        🎒
+      </div>
+    </div>
+
+    <p className="text-sm font-black uppercase tracking-[0.22em] text-white/70">
+      Finding saved posts
+    </p>
+
+    <p className="mt-2 max-w-xs text-xs font-bold leading-relaxed text-white/35">
+      Students are checking rooms, essentials, and campus deals for you.
+    </p>
+
+    <div className="mt-5 flex items-center gap-1.5">
+      <span className="h-2 w-2 rounded-full bg-kjc-accent animate-bounce [animation-delay:0ms]" />
+      <span className="h-2 w-2 rounded-full bg-kjc-accent animate-bounce [animation-delay:150ms]" />
+      <span className="h-2 w-2 rounded-full bg-kjc-accent animate-bounce [animation-delay:300ms]" />
+    </div>
+  </div>
+)}
+
+      {items.length === 0 && !loading && (
+  <div className="text-center py-10">
+    <div className="text-4xl mb-3">🔖</div>
+
+    <p className="text-white font-semibold">
+      No saved posts yet
+    </p>
+
+    <p className="text-white/40 text-sm mt-2">
+      Save listings to view them here later
+    </p>
+  </div>
+)}
+
 
       {!loading &&
         items.map((item) => {
