@@ -753,13 +753,22 @@ function RoomsPage({
       ) : (
         <div className="grid gap-6">
           {loading ? (
-            [1, 2].map((item) => (
-              <div
-                key={item}
-                className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
-              />
-            ))
-          ) : listings.length === 0 ? (
+  <div className="flex flex-col items-center justify-center py-20">
+
+    <div className="w-40 h-40">
+      <LottiePlayer animation={homeLoading} />
+    </div>
+
+    <p className="mt-4 text-xs font-black uppercase tracking-[0.28em] text-white/50">
+      Finding rooms near KJU
+    </p>
+
+    <p className="mt-2 text-[10px] text-white/30">
+      Students are checking listings...
+    </p>
+
+  </div>
+) : listings.length === 0 ? (
             <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
                 No rooms match this search
@@ -806,13 +815,13 @@ function MarketPage({
 
       <div className="grid gap-6">
         {loading ? (
-          [1, 2].map((item) => (
-            <div
-              key={item}
-              className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
-            />
-          ))
-        ) : items.length === 0 ? (
+  [1, 2].map((item) => (
+    <div
+      key={item}
+      className="aspect-[16/10] animate-pulse rounded-[40px] border border-white/10 bg-white/5"
+    />
+  ))
+) : items.length === 0 ? (
           <div className="rounded-[40px] border border-dashed border-white/10 bg-white/5 py-24 text-center">
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/30">
               Nothing here yet
