@@ -1766,8 +1766,13 @@ export default function Shell() {
           ),
         ];
 
-        setMyHousingData(mergedHousing);
-        setMyMarketData(mergedMarket);
+        setMyHousingData(
+  mergedHousing.filter((item) => item.status !== "deleted")
+);
+
+setMyMarketData(
+  mergedMarket.filter((item) => item.status !== "deleted")
+);
       } else {
         setMyHousingData([]);
         setMyMarketData([]);
