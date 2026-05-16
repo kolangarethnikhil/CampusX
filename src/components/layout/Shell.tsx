@@ -1287,11 +1287,20 @@ function Chattery({
   };
 
   const handleSend = async () => {
-    if (!input.trim() || !selectedChat) return;
+  const text = input.trim();
 
-    await sendMessage(selectedChat.id, input.trim());
-    setInput("");
-  };
+  if (!text || !selectedChat) return;
+
+  setInput("");
+
+  try {
+    await sendMessage(selectedChat.id, text);
+  } catch (error) {
+    console.error(error);
+    setInput(text);
+    alert("Message could not be sent. Please try again.");
+  }
+};
 
   if (selectedChat) {
     const otherUserId = getOtherUserId(selectedChat);

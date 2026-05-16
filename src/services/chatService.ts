@@ -323,6 +323,7 @@ export async function sendMessage(
     void notifyReceiver(conversationId, trimmed);
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, "messages");
+    throw error;
   }
 }
 
