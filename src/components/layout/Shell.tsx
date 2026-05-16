@@ -29,6 +29,7 @@ import {
   HousingFurnishing,
   HousingListing,
   HousingRoomType,
+  updateHousingListing,
   renewHousingListing,
   reopenHousingListing,
 } from "../../services/housingService";
@@ -38,6 +39,7 @@ import {
   getMarketListings,
   getMyMarketListings,
   markMarketListingSold,
+  updateMarketListing,
   MarketListing,
   renewMarketListing,
   reopenMarketListing,
