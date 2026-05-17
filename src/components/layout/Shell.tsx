@@ -118,9 +118,20 @@ type UserLite = {
 type PendingIntent =
   | { kind: "post" }
   | {
+      kind: "save";
+      listingId: string;
+      listingType: ListingType;
+    }
+  | {
       kind: "contact";
       ownerId: string;
+      listingId: string;
+      title: string;
       listingType: string;
+    }
+  | {
+      kind: "tab";
+      tab: Tab;
     }
   | {
       kind: "report";
@@ -298,11 +309,13 @@ function BottomNav({
   activeTab,
   onTabChange,
   onAddClick,
+  onRequireAuth,
   bottomUnreadCount,
 }: {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
   onAddClick: () => void | Promise<void>;
+  onRequireAuth: (intent: PendingIntent) => boolean;
   bottomUnreadCount?: number;
 }) {
   const tabs = [
@@ -320,8 +333,17 @@ function BottomNav({
           key={tab.id}
           type="button"
           onClick={() => {
-            if (tab.id === "add") void onAddClick();
-            else onTabChange(tab.id as Tab);
+            if (tab.id === "add") {
+              void onAddClick();
+              return;
+            }
+
+            if (tab.id === "inbox" || tab.id === "me") {
+              const blocked = onRequireAuth({ kind: "tab", tab: tab.id as Tab });
+              if (blocked) return;
+            }
+
+            onTabChange(tab.id as Tab);
           }}
           className={`relative flex items-center justify-center transition-transform duration-150 ease-out active:scale-[0.97] ${
             tab.special
@@ -479,7 +501,7 @@ function ListingCard({
   onRequireProfileReady,
   showOwnerStats,
   onRenew,
-  onOpenAuthIntro,
+  onRequireAuth,
 }: {
   listing: HousingListing | MarketListing;
   type: ListingType;
@@ -488,7 +510,7 @@ function ListingCard({
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   showOwnerStats?: boolean;
   onRenew?: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
-  onOpenAuthIntro?: () => void;
+  onRequireAuth?: (intent: PendingIntent) => boolean;
 }) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
@@ -532,8 +554,7 @@ function ListingCard({
     event.stopPropagation();
 
     if (!user) {
-      // open local auth intro (provided via prop when ListingCard is rendered)
-      onOpenAuthIntro?.();
+      onRequireAuth?.({ kind: "save", listingId: listing.id, listingType: type });
       return;
     }
 
@@ -741,7 +762,7 @@ function RoomsPage({
   onOpenDetails,
   onRequireProfileReady,
   user, // ✅ ADD THIS HERE
-  onOpenAuthIntro,
+  onRequireAuth,
 }: {
   listings: HousingListing[];
   loading: boolean;
@@ -750,7 +771,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   user?: any; // ✅ ADD THIS
-  onOpenAuthIntro?: () => void;
+  onRequireAuth?: (intent: PendingIntent) => boolean;
 
 }) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -837,7 +858,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
                 onContact={onContact}
                 onOpenDetails={onOpenDetails}
                 onRequireProfileReady={onRequireProfileReady}
-                onOpenAuthIntro={onOpenAuthIntro}
+                onRequireAuth={onRequireAuth}
               />
             ))
           )}
@@ -853,14 +874,14 @@ function MarketPage({
   onContact,
   onOpenDetails,
   onRequireProfileReady,
-  onOpenAuthIntro,
+  onRequireAuth,
 }: {
   items: MarketListing[];
   loading: boolean;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
-  onOpenAuthIntro?: () => void;
+  onRequireAuth?: (intent: PendingIntent) => boolean;
 }) {
   return (
     <div className="space-y-8">
@@ -896,7 +917,7 @@ function MarketPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
-              onOpenAuthIntro={onOpenAuthIntro}
+              onRequireAuth={onRequireAuth}
             />
           ))
         )}
@@ -913,7 +934,7 @@ function MyPostsPage({
   onOpenDetails,
   onRequireProfileReady,
   onRenew,
-  onOpenAuthIntro,
+  onRequireAuth,
 }: {
   housing: HousingListing[];
   market: MarketListing[];
@@ -922,7 +943,7 @@ function MyPostsPage({
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   onRenew: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
-  onOpenAuthIntro?: () => void;
+  onRequireAuth?: (intent: PendingIntent) => boolean;
 }) {
   const total = housing.length + market.length;
 
@@ -953,7 +974,7 @@ function MyPostsPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
-              onOpenAuthIntro={onOpenAuthIntro}
+              onRequireAuth={onRequireAuth}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -967,7 +988,7 @@ function MyPostsPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
-              onOpenAuthIntro={onOpenAuthIntro}
+              onRequireAuth={onRequireAuth}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -1748,10 +1769,44 @@ useEffect(() => {
   const [loading, setLoading] = useState(true);
   const [bottomUnreadCount, setBottomUnreadCount] = useState(0);
 
-  const [showAuthIntro, setShowAuthIntro] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  const openAuthIntro = () => {
-    setShowAuthIntro(true);
+  useEffect(() => {
+    if (authModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [authModalOpen]);
+
+  const openAuthIntro = (intent?: PendingIntent) => {
+    if (intent) {
+      setPendingIntent(intent);
+    }
+
+    setAuthModalOpen(true);
+  };
+
+  const closeAuthIntro = () => {
+    setAuthModalOpen(false);
+  };
+
+  const cancelAuthIntro = () => {
+    setAuthModalOpen(false);
+    setPendingIntent(null);
+  };
+
+  const requireAuth = (intent: PendingIntent) => {
+    if (!user) {
+      openAuthIntro(intent);
+      return true;
+    }
+
+    return false;
   };
 
   const [selectedListing, setSelectedListing] = useState<HousingListing | MarketListing | null>(null);
@@ -1771,10 +1826,10 @@ useEffect(() => {
   useEffect(() => {
     if (authLoading) return;
 
-    if (user && profile && !profileCompleted) {
+    if (user && profile && !profile.profileCompleted) {
       setProfileGateOpen(true);
     }
-  }, [authLoading, profile, profileCompleted, user]);
+  }, [authLoading, profile, user]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -1815,17 +1870,19 @@ useEffect(() => {
   }, [user?.uid, profile?.notificationsEnabled]);
 
   useEffect(() => {
-    if (!pendingIntent || !user || !profile) return;
+    if (!user || !pendingIntent) return;
 
     if (!profileCompleted) {
       setProfileGateOpen(true);
       return;
     }
 
-    const intent = pendingIntent;
-    setPendingIntent(null);
-    void runIntent(intent);
-  }, [pendingIntent, user?.uid, profile?.profileCompleted, profileCompleted]);
+    (async () => {
+      const intent = pendingIntent;
+      setPendingIntent(null);
+      await runIntent(intent);
+    })();
+  }, [user, pendingIntent, profileCompleted]);
 
   const loadData = async () => {
     setLoading(true);
@@ -2159,6 +2216,16 @@ setMyMarketData(
       return;
     }
 
+    if (intent.kind === "save") {
+      await saveListing(intent.listingId, intent.listingType);
+      return;
+    }
+
+    if (intent.kind === "tab") {
+      setActiveTab(intent.tab);
+      return;
+    }
+
     if (intent.kind === "contact") {
       await startContactFlow(
         intent.ownerId,
@@ -2175,11 +2242,10 @@ setMyMarketData(
   };
 
   const requireProfileReady = async (intent: PendingIntent) => {
-    if (!user) {
-      setPendingIntent(intent);
-      await signIn();
+    if (requireAuth(intent)) {
       return;
     }
+
     if (!profileCompleted) {
       setPendingIntent(intent);
       setProfileGateOpen(true);
@@ -2293,7 +2359,7 @@ setMyMarketData(
                 onOpenDetails={openListingDetails}
                 onRequireProfileReady={requireProfileReady}
                 user={user}
-                onOpenAuthIntro={openAuthIntro}
+                onRequireAuth={requireAuth}
               />
 
             )}
@@ -2305,7 +2371,7 @@ setMyMarketData(
                 onContact={handleContact}
                 onOpenDetails={openListingDetails}
                 onRequireProfileReady={requireProfileReady}
-                onOpenAuthIntro={openAuthIntro}
+                onRequireAuth={requireAuth}
               />
             )}
 
@@ -2322,7 +2388,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={() => openAuthIntro()}
+        onClick={() => requireAuth({ kind: "tab", tab: "inbox" })}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view inbox
@@ -2351,7 +2417,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={() => openAuthIntro()}
+        onClick={() => requireAuth({ kind: "tab", tab: "me" })}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view profile
@@ -2437,7 +2503,7 @@ setMyMarketData(
                     onOpenDetails={openListingDetails}
                     onRequireProfileReady={requireProfileReady}
                     onRenew={handleRenewListing}
-                    onOpenAuthIntro={openAuthIntro}
+                    onRequireAuth={requireAuth}
                   />
 
                   <button
@@ -2458,6 +2524,7 @@ setMyMarketData(
     activeTab={activeTab}
     onTabChange={setActiveTab}
     onAddClick={() => requireProfileReady({ kind: "post" })}
+    onRequireAuth={requireAuth}
     bottomUnreadCount={bottomUnreadCount}
   />
 )}
@@ -2564,47 +2631,42 @@ setMyMarketData(
         onClose={() => setForegroundPush(null)}
       />
 
-      {showAuthIntro && (
-        <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-black px-6 text-center">
+      {authModalOpen && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black px-6 text-center">
+          <button
+            type="button"
+            onClick={cancelAuthIntro}
+            className="absolute left-5 top-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-white/80"
+            aria-label="Close welcome screen"
+          >
+            <ArrowLeft size={22} />
+          </button>
 
           <h1 className="text-3xl font-black text-white">
             Welcome to CampusX
           </h1>
 
-          <p className="mt-3 text-sm text-white/50 max-w-xs">
+          <p className="mt-3 max-w-xs text-sm text-white/50">
             Find rooms, connect with students, and explore campus essentials.
           </p>
 
-          <div className="mt-6 space-y-3 text-left text-sm max-w-xs">
-            
-            <p className="text-white font-bold">
-              🎓 Students
-            </p>
-            <p className="text-white/50 text-xs">
-              → Use college email
-            </p>
+          <div className="mt-6 max-w-xs space-y-3 text-left text-sm">
+            <p className="font-bold text-white">Students</p>
+            <p className="text-xs text-white/50">Use college email</p>
 
-            <p className="text-white font-bold">
-              🎓 Alumni
-            </p>
-            <p className="text-white/50 text-xs">
-              → Use college/personal
-            </p>
+            <p className="font-bold text-white">Alumni</p>
+            <p className="text-xs text-white/50">Use college or personal email</p>
 
-            <p className="text-white font-bold">
-              👥 Community
-            </p>
-            <p className="text-white/50 text-xs">
-              → Use Gmail
-            </p>
+            <p className="font-bold text-white">Others</p>
+            <p className="text-xs text-white/50">Use any Gmail</p>
           </div>
 
           <button
             onClick={async () => {
-              setShowAuthIntro(false);
+              closeAuthIntro();
               await signIn();
             }}
-            className="mt-8 bg-white text-black px-6 py-3 rounded-full font-black uppercase text-xs tracking-wide active:scale-[0.97]"
+            className="mt-8 rounded-full bg-white px-6 py-3 text-xs font-black uppercase tracking-wide text-black active:scale-[0.97]"
           >
             Continue with Google
           </button>
@@ -2612,7 +2674,6 @@ setMyMarketData(
           <p className="mt-4 text-[10px] text-white/30">
             Only verified users can interact on CampusX
           </p>
-
         </div>
       )}
 
