@@ -118,8 +118,6 @@ type PendingIntent =
   | {
       kind: "contact";
       ownerId: string;
-      listingId: string;
-      title: string;
       listingType: string;
     }
   | {
@@ -476,6 +474,7 @@ function ListingCard({
   type,
   onContact,
   onOpenDetails,
+  onRequireProfileReady,
   showOwnerStats,
   onRenew,
 }: {
@@ -483,12 +482,13 @@ function ListingCard({
   type: ListingType;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   showOwnerStats?: boolean;
   onRenew?: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
 }) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
-  const { user, signIn } = useAuth();
+  const { user } = useAuth();
 
   const isHousing = type === "housing";
   const isOwner = listing.postedBy === user?.uid;
@@ -576,7 +576,7 @@ function ListingCard({
           </div>
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 to-transparent" />
 
         <div className="absolute left-5 right-5 top-5 flex items-start justify-between">
           <div className="flex flex-col gap-2">
@@ -734,6 +734,7 @@ function RoomsPage({
   loading,
   onContact,
   onOpenDetails,
+  onRequireProfileReady,
   user, // ✅ ADD THIS HERE
 }: {
   listings: HousingListing[];
@@ -741,6 +742,7 @@ function RoomsPage({
   
 onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   user?: any; // ✅ ADD THIS
 
 }) {
@@ -791,7 +793,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
       ) : (
         <div className="grid gap-6">
           
- {!user && (
+ {!loading && !user && (
     <p className="text-center text-xs text-white/40 mb-2">
       Browse rooms — sign in to contact owners
     </p>
@@ -827,6 +829,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
                 type="housing"
                 onContact={onContact}
                 onOpenDetails={onOpenDetails}
+                onRequireProfileReady={onRequireProfileReady}
               />
             ))
           )}
@@ -841,11 +844,13 @@ function MarketPage({
   loading,
   onContact,
   onOpenDetails,
+  onRequireProfileReady,
 }: {
   items: MarketListing[];
   loading: boolean;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
 }) {
   return (
     <div className="space-y-8">
@@ -880,6 +885,7 @@ function MarketPage({
               type="market"
               onContact={onContact}
               onOpenDetails={onOpenDetails}
+              onRequireProfileReady={onRequireProfileReady}
             />
           ))
         )}
@@ -894,6 +900,7 @@ function MyPostsPage({
   loading,
   onContact,
   onOpenDetails,
+  onRequireProfileReady,
   onRenew,
 }: {
   housing: HousingListing[];
@@ -901,6 +908,7 @@ function MyPostsPage({
   loading: boolean;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   onRenew: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
 }) {
   const total = housing.length + market.length;
@@ -931,6 +939,7 @@ function MyPostsPage({
               type="housing"
               onContact={onContact}
               onOpenDetails={onOpenDetails}
+              onRequireProfileReady={onRequireProfileReady}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -943,6 +952,7 @@ function MyPostsPage({
               type="market"
               onContact={onContact}
               onOpenDetails={onOpenDetails}
+              onRequireProfileReady={onRequireProfileReady}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -1738,6 +1748,14 @@ useEffect(() => {
   const { user, profile, profileCompleted, signIn, logout, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (user && profile && !profileCompleted) {
+      setProfileGateOpen(true);
+    }
+  }, [authLoading, profile, profileCompleted, user]);
+
+  useEffect(() => {
     if (!user?.uid) {
       setBottomUnreadCount(0);
       return;
@@ -2137,11 +2155,10 @@ setMyMarketData(
 
   const requireProfileReady = async (intent: PendingIntent) => {
     if (!user) {
-  alert("Sign in to create a post");
-  setPendingIntent(intent);
-  await signIn();
-  return;
-}
+      setPendingIntent(intent);
+      await signIn();
+      return;
+    }
     if (!profileCompleted) {
       setPendingIntent(intent);
       setProfileGateOpen(true);
@@ -2249,12 +2266,13 @@ setMyMarketData(
           >
             {activeTab === "home" && (
               <RoomsPage
-  listings={filteredHousingData}
-  loading={loading}
-  onContact={handleContact}
-  onOpenDetails={openListingDetails}
-  user={user}   // ✅ THIS FIXES THE CRASH
-/>
+                listings={filteredHousingData}
+                loading={loading}
+                onContact={handleContact}
+                onOpenDetails={openListingDetails}
+                onRequireProfileReady={requireProfileReady}
+                user={user}
+              />
 
             )}
 
@@ -2264,6 +2282,7 @@ setMyMarketData(
                 loading={loading}
                 onContact={handleContact}
                 onOpenDetails={openListingDetails}
+                onRequireProfileReady={requireProfileReady}
               />
             )}
 
@@ -2273,8 +2292,11 @@ setMyMarketData(
     <div className="flex items-center justify-center py-24">
       <LottiePlayer animation={homeLoading} className="w-40 h-40" />
     </div>
-  ) : !user ? (
+  ) : !authLoading && !user ? (
     <div className="py-24 text-center">
+      <p className="mx-auto mb-4 max-w-xs text-[11px] font-medium leading-relaxed text-white/45">
+        Students use their college email. Alumni can use college or personal email. Others can use any Gmail account.
+      </p>
       <button
         type="button"
         onClick={signIn}
@@ -2299,8 +2321,11 @@ setMyMarketData(
     <div className="flex items-center justify-center py-24">
       <LottiePlayer animation={homeLoading} className="w-40 h-40" />
     </div>
-  ) : !user ? (
+  ) : !authLoading && !user ? (
     <div className="py-24 text-center">
+      <p className="mx-auto mb-4 max-w-xs text-[11px] font-medium leading-relaxed text-white/45">
+        Students use their college email. Alumni can use college or personal email. Others can use any Gmail account.
+      </p>
       <button
         type="button"
         onClick={signIn}
@@ -2387,6 +2412,7 @@ setMyMarketData(
                     loading={loading}
                     onContact={handleContact}
                     onOpenDetails={openListingDetails}
+                    onRequireProfileReady={requireProfileReady}
                     onRenew={handleRenewListing}
                   />
 

@@ -513,26 +513,23 @@ export default function ListingDetailModal({
                 </button>
 
                 <div className="grid grid-cols-2 gap-3">
-                  
+                  <button
+                    type="button"
+                    onClick={() => onMarkSold?.(market)}
+                    disabled={isHousing || status === "sold"}
+                    className="rounded-[24px] border border-kjc-accent/20 bg-kjc-accent/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Sold
+                  </button>
 
-                  {!isHousing && status !== "sold" ? (
-                    <button
-                      type="button"
-                      onClick={() => onMarkSold?.(market)}
-                      className="rounded-[24px] border border-kjc-accent/20 bg-kjc-accent/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
-                    >
-                      Sold
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onDelete?.(listing, type)}
-                      className="flex items-center justify-center gap-2 rounded-[24px] border border-rose-500/20 bg-rose-500/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-rose-400 transition-transform duration-150 ease-out active:scale-[0.97]"
-                    >
-                      Delete
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDelete?.(listing, type)}
+                    className="flex items-center justify-center gap-2 rounded-[24px] border border-rose-500/20 bg-rose-500/10 py-4 text-[10px] font-black uppercase tracking-[0.18em] text-rose-400 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Delete
+                    <Trash2 size={14} />
+                  </button>
                 </div>
 
                 
