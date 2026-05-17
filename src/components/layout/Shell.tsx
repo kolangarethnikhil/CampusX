@@ -737,8 +737,11 @@ function RoomsPage({
 }: {
   listings: HousingListing[];
   loading: boolean;
-  onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
+  
+onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
+  user?: any; // ✅ ADD THIS
+
 }) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const isMapMode = viewMode === "map";
@@ -2245,11 +2248,13 @@ setMyMarketData(
           >
             {activeTab === "home" && (
               <RoomsPage
-                listings={filteredHousingData}
-                loading={loading}
-                onContact={handleContact}
-                onOpenDetails={openListingDetails}
-              />
+  listings={filteredHousingData}
+  loading={loading}
+  onContact={handleContact}
+  onOpenDetails={openListingDetails}
+  user={user}   // ✅ THIS FIXES THE CRASH
+/>
+
             )}
 
             {activeTab === "search" && (
