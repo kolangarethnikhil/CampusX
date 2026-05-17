@@ -248,6 +248,7 @@ export default function ListingDetailModal({
                 <Home size={64} strokeWidth={1} />
               </div>
             )}
+            
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
 
