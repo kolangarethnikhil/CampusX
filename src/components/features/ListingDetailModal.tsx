@@ -186,7 +186,7 @@ export default function ListingDetailModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[200] flex items-end justify-center p-4 sm:items-center">
+      <div className="fixed inset-0 z-[999] bg-black flex items-center justify-center">
         <div className="absolute inset-0 bg-black/80 pointer-events-auto" onClick={onClose} />
 
         <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[44px] border border-white/10 bg-black shadow-pro-lg scrollbar-hide sm:rounded-[44px]">
@@ -248,7 +248,7 @@ export default function ListingDetailModal({
                 <Home size={64} strokeWidth={1} />
               </div>
             )}
-            
+
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
 
@@ -611,7 +611,12 @@ export default function ListingDetailModal({
           <div className="flex h-20 items-center justify-between px-5">
             <button
               type="button"
-              onClick={() => setIsImageViewerOpen(false)}
+              
+onClick={(e) => {
+      e.stopPropagation();
+      setIsImageViewerOpen(false);
+    }}
+
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white text-black shadow-pro transition-transform duration-150 ease-out active:scale-[0.97]"
               aria-label="Back to listing"
             >
