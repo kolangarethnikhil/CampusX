@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Bookmark,
   Eye,
+  Share2,
   Filter,
   Home,
   MapPin,
@@ -570,6 +571,48 @@ function ListingCard({
   const locationDisplay = isHousing
     ? getHousingLocationDisplay(housingListing).compact
     : listing.formattedAddress?.split(",")[0] || "Near KJU";
+    const handleShareCard = async (event: React.MouseEvent) => {
+  event.stopPropagation();
+
+  const shareUrl = `${window.location.origin}/?listingType=${type}&listingId=${listing.id}`;
+  const listingKind = isHousing ? "room" : "item";
+
+  const priceLabel = isHousing
+    ? `₹${Number(price).toLocaleString()} / month`
+    : `₹${Number(price).toLocaleString()}`;
+
+  const emoji = isHousing ? "🏠" : "📦";
+
+  const hookLine = isHousing
+    ? `Found a ${housingListing.roomType || "room"} near KJU — no broker, direct from student.`
+    : `${listing.title} available — student selling, no middleman.`;
+
+  const shareText = `${emoji} ${listing.title}
+
+${priceLabel}
+📍 ${locationDisplay}
+
+${hookLine}
+
+🎓 CampusX · campus-x.app
+Rooms, items & more — built around the KJU student community`;
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: listing.title,
+        text: shareText,
+        url: shareUrl,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(`${shareText}\n\n👉 ${shareUrl}`);
+    alert("Copied! Paste it on WhatsApp or Instagram 🚀");
+  } catch (error) {
+    console.error("Share failed:", error);
+  }
+};
 
   return (
     <motion.div
@@ -628,6 +671,14 @@ function ListingCard({
                 1/{photoCount}
               </span>
             )}
+            <button
+  type="button"
+  onClick={handleShareCard}
+  className="flex h-12 w-12 items-center justify-center rounded-3xl border border-white/20 bg-black/35 text-white backdrop-blur-xl transition-transform duration-150 ease-out hover:bg-white/15 active:scale-[0.97]"
+  aria-label="Share listing"
+>
+  <Share2 size={19} />
+</button>
 
             {!isOwner && !deleted && (
               <button

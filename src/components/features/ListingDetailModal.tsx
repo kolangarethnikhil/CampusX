@@ -159,17 +159,47 @@ export default function ListingDetailModal({
 
 const handleShareListing = async () => {
   const listingKind = isHousing ? "room" : "item";
+
+  const isSelling = listingKind === "item";
+
   const priceLabel = isHousing
     ? `₹${Number(price).toLocaleString()} / month`
     : `₹${Number(price).toLocaleString()}`;
 
-  const shareText = `${listing.title}
+  const emojiMap: Record<string, string> = {
+    room: "🏠",
+    pg: "🏘️",
+    housing: "🏠",
+    item: "📦",
+    roommate: "🤝",
+    food: "🍱",
+    job: "💼",
+    lost: "🔍",
+  };
+
+  const emoji = emojiMap[listingKind] || "📌";
+
+  const ctaLine = isHousing
+    ? `📍 ${location.compact || location.address} · ${
+        housing.distanceLabel || housing.travelDistanceLabel || "near KJU"
+      }`
+    : `📍 ${location.compact || location.address}`;
+
+  const hookLine = isHousing
+    ? `Found a ${housing.roomType || "room"} near KJU — no broker, direct from student.`
+    : isSelling
+      ? `${listing.title} available — student selling, no middleman.`
+      : `Spotted on CampusX — KJU student marketplace.`;
+
+  const shareText = `${emoji} ${listing.title}
 
 ${priceLabel}
-${location.compact || location.address}
+${ctaLine}
 
-Check this ${listingKind} on CampusX:
-${shareUrl}`;
+${hookLine}
+
+🎓 CampusX · campus-x.app
+Rooms, items & more — built around the KJU student community`;
 
   try {
     if (navigator.share) {
@@ -181,8 +211,8 @@ ${shareUrl}`;
       return;
     }
 
-    await navigator.clipboard.writeText(shareText);
-    alert("Listing link copied. You can paste it on WhatsApp or Instagram.");
+    await navigator.clipboard.writeText(`${shareText}\n\n👉 ${shareUrl}`);
+    alert("Copied! Paste it on WhatsApp or Instagram 🚀");
   } catch (error) {
     console.error("Share failed:", error);
   }
