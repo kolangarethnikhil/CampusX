@@ -1854,6 +1854,7 @@ useEffect(() => {
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
 
   const { user, profile, profileCompleted, signIn, logout, loading: authLoading } = useAuth();
+  
 
   useEffect(() => {
     if (authLoading) return;
@@ -2018,6 +2019,45 @@ setMyMarketData(
       });
     }
   };
+  useEffect(() => {
+  async function openSharedListingFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const listingType = params.get("listingType") as ListingType | null;
+    const listingId = params.get("listingId");
+
+    if (!listingType || !listingId) return;
+
+    if (listingType !== "housing" && listingType !== "market") return;
+
+    try {
+      const collectionName =
+        listingType === "housing" ? "housing_listings" : "marketplace_listings";
+
+      const snapshot = await getDoc(doc(db, collectionName, listingId));
+
+      if (!snapshot.exists()) {
+        alert("This listing is no longer available.");
+        window.history.replaceState({}, "", window.location.pathname);
+        return;
+      }
+
+      const listing = {
+        id: snapshot.id,
+        ...snapshot.data(),
+      } as HousingListing | MarketListing;
+
+      await openListingDetails(listing, listingType);
+
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (error) {
+      console.error("Failed to open shared listing:", error);
+      alert("Could not open this listing.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }
+
+  void openSharedListingFromUrl();
+}, []);
 
   const openOriginalListingFromConversation = async (conversation: Conversation) => {
     try {

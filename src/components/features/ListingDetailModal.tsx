@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Ban,
   CalendarDays,
+  Share2,
   Edit3,
   ExternalLink,
   Flag,
@@ -154,6 +155,38 @@ export default function ListingDetailModal({
         : "";
 
   const posterName = poster?.displayName || "CampusX user";
+  const shareUrl = `${window.location.origin}/?listingType=${type}&listingId=${listing.id}`;
+
+const handleShareListing = async () => {
+  const listingKind = isHousing ? "room" : "item";
+  const priceLabel = isHousing
+    ? `₹${Number(price).toLocaleString()} / month`
+    : `₹${Number(price).toLocaleString()}`;
+
+  const shareText = `${listing.title}
+
+${priceLabel}
+${location.compact || location.address}
+
+Check this ${listingKind} on CampusX:
+${shareUrl}`;
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: listing.title,
+        text: shareText,
+        url: shareUrl,
+      });
+      return;
+    }
+
+    await navigator.clipboard.writeText(shareText);
+    alert("Listing link copied. You can paste it on WhatsApp or Instagram.");
+  } catch (error) {
+    console.error("Share failed:", error);
+  }
+};
 
   const goToPreviousPhoto = () => {
     if (!hasMultiplePhotos) return;
@@ -515,6 +548,14 @@ export default function ListingDetailModal({
                 </div>
               </div>
             </button>
+            <button
+  type="button"
+  onClick={handleShareListing}
+  className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-white/10 bg-white/[0.04] py-5 text-[10px] font-black uppercase tracking-[0.24em] text-white/70 transition-transform duration-150 ease-out hover:bg-white/[0.08] active:scale-[0.97]"
+>
+  Share listing
+  <Share2 size={16} />
+</button>
 
             {isOwner ? (
               <div className="grid gap-3">
