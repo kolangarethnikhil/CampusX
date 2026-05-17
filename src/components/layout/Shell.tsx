@@ -786,6 +786,13 @@ function RoomsPage({
         />
       ) : (
         <div className="grid gap-6">
+          
+ {!user && (
+    <p className="text-center text-xs text-white/40 mb-2">
+      Browse rooms — sign in to contact owners
+    </p>
+  )}
+
           {loading ? (
   <div className="flex flex-col items-center justify-center py-20">
 
@@ -1029,6 +1036,17 @@ function HousingFilterModal({
   onClear: () => void;
 }) {
   const [draft, setDraft] = useState<HousingFilters>(filters);
+  useEffect(() => {
+  if (isOpen) {
+    document.body.style.overflow = "hidden";
+  } else {
+    document.body.style.overflow = "";
+  }
+
+  return () => {
+    document.body.style.overflow = "";
+  };
+}, [isOpen]);
 
   useEffect(() => {
     if (isOpen) setDraft(filters);
@@ -1047,9 +1065,10 @@ function HousingFilterModal({
   };
 
   const apply = () => {
-    onChange(draft);
-    onClose();
-  };
+  onChange(draft);
+  onClose();
+  alert("Filters applied"); // temp for launch
+};
 
   return (
     <div className="fixed inset-0 z-[130] flex items-end justify-center p-4 sm:items-center">
@@ -2114,11 +2133,11 @@ setMyMarketData(
 
   const requireProfileReady = async (intent: PendingIntent) => {
     if (!user) {
-      setPendingIntent(intent);
-      await signIn();
-      return;
-    }
-
+  alert("Sign in to create a post");
+  setPendingIntent(intent);
+  await signIn();
+  return;
+}
     if (!profileCompleted) {
       setPendingIntent(intent);
       setProfileGateOpen(true);
@@ -2216,7 +2235,7 @@ setMyMarketData(
         activeFilterCount={activeTab === "home" ? activeHousingFilterCount : 0}
       />
 
-      <main className="mx-auto max-w-xl px-6 py-10">
+      <main className="mx-auto w-full max-w-2xl px-6 py-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -2378,12 +2397,14 @@ setMyMarketData(
         </AnimatePresence>
       </main>
 
-      <BottomNav
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onAddClick={() => requireProfileReady({ kind: "post" })}
-        bottomUnreadCount={bottomUnreadCount}
-      />
+      {!selectedListing && !isModalOpen && !showFilters && (
+  <BottomNav
+    activeTab={activeTab}
+    onTabChange={setActiveTab}
+    onAddClick={() => requireProfileReady({ kind: "post" })}
+    bottomUnreadCount={bottomUnreadCount}
+  />
+)}
 
       <HousingFilterModal
         isOpen={showFilters && activeTab === "home"}

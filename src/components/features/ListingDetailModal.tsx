@@ -102,7 +102,17 @@ export default function ListingDetailModal({
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+  useEffect(() => {
+  if (isOpen) {
+    document.body.style.overflow = "hidden";
+  } else {
+    document.body.style.overflow = "";
+  }
 
+  return () => {
+    document.body.style.overflow = "";
+  };
+}, [isOpen]);
   const photos = useMemo(
     () => listing?.photos?.filter(Boolean) || [],
     [listing?.photos]
@@ -175,13 +185,8 @@ export default function ListingDetailModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[140] flex items-end justify-center p-4 sm:items-center">
-        <button
-          type="button"
-          aria-label="Close listing detail"
-          onClick={onClose}
-          className="absolute inset-0 bg-black/80"
-        />
+      <div className="fixed inset-0 z-[200] flex items-end justify-center p-4 sm:items-center">
+        <div className="absolute inset-0 bg-black/80 pointer-events-auto" onClick={onClose} />
 
         <div className="relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[44px] border border-white/10 bg-black shadow-pro-lg scrollbar-hide sm:rounded-[44px]">
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/5 bg-black/95 p-5">

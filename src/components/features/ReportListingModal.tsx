@@ -1,5 +1,6 @@
 import { Flag, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import { HousingListing } from "../../services/housingService.ts";
 import { MarketListing } from "../../services/marketService";
 import {
@@ -35,6 +36,17 @@ export default function ReportListingModal({
   const [reason, setReason] = useState<ReportReason>("scam");
   const [details, setDetails] = useState("");
   const [loading, setLoading] = useState(false);
+  useEffect(() => {
+  if (isOpen) {
+    document.body.style.overflow = "hidden";
+  } else {
+    document.body.style.overflow = "";
+  }
+
+  return () => {
+    document.body.style.overflow = "";
+  };
+}, [isOpen]);
 
   if (!isOpen || !listing) return null;
 
