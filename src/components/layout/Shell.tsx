@@ -734,6 +734,7 @@ function RoomsPage({
   loading,
   onContact,
   onOpenDetails,
+  user, // ✅ ADD THIS HERE
 }: {
   listings: HousingListing[];
   loading: boolean;
