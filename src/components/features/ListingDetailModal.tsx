@@ -226,8 +226,12 @@ export default function ListingDetailModal({
           >
             {activePhoto ? (
               <button
-                type="button"
-                onClick={() => setIsImageViewerOpen(true)}
+  type="button"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsImageViewerOpen(true);
+  }}
                 className="relative z-10 block h-full w-full cursor-pointer"
                 aria-label="Open full image"
               >
