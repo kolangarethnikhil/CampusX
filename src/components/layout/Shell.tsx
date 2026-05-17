@@ -89,6 +89,8 @@ import {
   listenForForegroundMessages,
 } from "../../services/pushNotificationService.ts";
 
+// removed module-level trigger; auth intro is opened via `openAuthIntro` inside Shell
+
 const homeLoading = JSON.parse(homeLoadingRaw);
 
 type Tab = "home" | "search" | "inbox" | "me";
@@ -477,6 +479,7 @@ function ListingCard({
   onRequireProfileReady,
   showOwnerStats,
   onRenew,
+  onOpenAuthIntro,
 }: {
   listing: HousingListing | MarketListing;
   type: ListingType;
@@ -485,6 +488,7 @@ function ListingCard({
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   showOwnerStats?: boolean;
   onRenew?: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
+  onOpenAuthIntro?: () => void;
 }) {
   const [isSaved, setIsSaved] = useState(false);
   const [saveId, setSaveId] = useState<string | null>(null);
@@ -528,7 +532,8 @@ function ListingCard({
     event.stopPropagation();
 
     if (!user) {
-      await signIn();
+      // open local auth intro (provided via prop when ListingCard is rendered)
+      onOpenAuthIntro?.();
       return;
     }
 
@@ -736,6 +741,7 @@ function RoomsPage({
   onOpenDetails,
   onRequireProfileReady,
   user, // ✅ ADD THIS HERE
+  onOpenAuthIntro,
 }: {
   listings: HousingListing[];
   loading: boolean;
@@ -744,6 +750,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   user?: any; // ✅ ADD THIS
+  onOpenAuthIntro?: () => void;
 
 }) {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -830,6 +837,7 @@ onContact: (ownerId: string, listingId: string, title: string, type: string) => 
                 onContact={onContact}
                 onOpenDetails={onOpenDetails}
                 onRequireProfileReady={onRequireProfileReady}
+                onOpenAuthIntro={onOpenAuthIntro}
               />
             ))
           )}
@@ -845,12 +853,14 @@ function MarketPage({
   onContact,
   onOpenDetails,
   onRequireProfileReady,
+  onOpenAuthIntro,
 }: {
   items: MarketListing[];
   loading: boolean;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
+  onOpenAuthIntro?: () => void;
 }) {
   return (
     <div className="space-y-8">
@@ -886,6 +896,7 @@ function MarketPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
+              onOpenAuthIntro={onOpenAuthIntro}
             />
           ))
         )}
@@ -902,6 +913,7 @@ function MyPostsPage({
   onOpenDetails,
   onRequireProfileReady,
   onRenew,
+  onOpenAuthIntro,
 }: {
   housing: HousingListing[];
   market: MarketListing[];
@@ -910,6 +922,7 @@ function MyPostsPage({
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   onRenew: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
+  onOpenAuthIntro?: () => void;
 }) {
   const total = housing.length + market.length;
 
@@ -940,6 +953,7 @@ function MyPostsPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
+              onOpenAuthIntro={onOpenAuthIntro}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -953,6 +967,7 @@ function MyPostsPage({
               onContact={onContact}
               onOpenDetails={onOpenDetails}
               onRequireProfileReady={onRequireProfileReady}
+              onOpenAuthIntro={onOpenAuthIntro}
               showOwnerStats
               onRenew={onRenew}
             />
@@ -1733,6 +1748,12 @@ useEffect(() => {
   const [loading, setLoading] = useState(true);
   const [bottomUnreadCount, setBottomUnreadCount] = useState(0);
 
+  const [showAuthIntro, setShowAuthIntro] = useState(false);
+
+  const openAuthIntro = () => {
+    setShowAuthIntro(true);
+  };
+
   const [selectedListing, setSelectedListing] = useState<HousingListing | MarketListing | null>(null);
   const [selectedListingType, setSelectedListingType] = useState<ListingType>("housing");
   const [selectedPoster, setSelectedPoster] = useState<UserLite | null>(null);
@@ -2178,7 +2199,7 @@ setMyMarketData(
 
   const handleBlockUser = async (userIdToBlock: string) => {
     if (!user) {
-      await signIn();
+      openAuthIntro();
       return;
     }
 
@@ -2272,6 +2293,7 @@ setMyMarketData(
                 onOpenDetails={openListingDetails}
                 onRequireProfileReady={requireProfileReady}
                 user={user}
+                onOpenAuthIntro={openAuthIntro}
               />
 
             )}
@@ -2283,6 +2305,7 @@ setMyMarketData(
                 onContact={handleContact}
                 onOpenDetails={openListingDetails}
                 onRequireProfileReady={requireProfileReady}
+                onOpenAuthIntro={openAuthIntro}
               />
             )}
 
@@ -2299,7 +2322,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={signIn}
+        onClick={() => openAuthIntro()}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view inbox
@@ -2328,7 +2351,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={signIn}
+        onClick={() => openAuthIntro()}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view profile
@@ -2414,6 +2437,7 @@ setMyMarketData(
                     onOpenDetails={openListingDetails}
                     onRequireProfileReady={requireProfileReady}
                     onRenew={handleRenewListing}
+                    onOpenAuthIntro={openAuthIntro}
                   />
 
                   <button
@@ -2539,6 +2563,58 @@ setMyMarketData(
         payload={foregroundPush}
         onClose={() => setForegroundPush(null)}
       />
+
+      {showAuthIntro && (
+        <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-black px-6 text-center">
+
+          <h1 className="text-3xl font-black text-white">
+            Welcome to CampusX
+          </h1>
+
+          <p className="mt-3 text-sm text-white/50 max-w-xs">
+            Find rooms, connect with students, and explore campus essentials.
+          </p>
+
+          <div className="mt-6 space-y-3 text-left text-sm max-w-xs">
+            
+            <p className="text-white font-bold">
+              🎓 Students
+            </p>
+            <p className="text-white/50 text-xs">
+              → Use college email
+            </p>
+
+            <p className="text-white font-bold">
+              🎓 Alumni
+            </p>
+            <p className="text-white/50 text-xs">
+              → Use college/personal
+            </p>
+
+            <p className="text-white font-bold">
+              👥 Community
+            </p>
+            <p className="text-white/50 text-xs">
+              → Use Gmail
+            </p>
+          </div>
+
+          <button
+            onClick={async () => {
+              setShowAuthIntro(false);
+              await signIn();
+            }}
+            className="mt-8 bg-white text-black px-6 py-3 rounded-full font-black uppercase text-xs tracking-wide active:scale-[0.97]"
+          >
+            Continue with Google
+          </button>
+
+          <p className="mt-4 text-[10px] text-white/30">
+            Only verified users can interact on CampusX
+          </p>
+
+        </div>
+      )}
 
       <VerificationModal
         isOpen={verificationModalOpen}

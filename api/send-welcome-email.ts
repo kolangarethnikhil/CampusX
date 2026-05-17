@@ -6,10 +6,7 @@ function getFirebaseAdminApp() {
   if (admin.apps.length > 0) return admin.app();
 
   const encoded = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
-
-  if (!encoded) {
-    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
-  }
+  if (!encoded) throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
 
   const serviceAccount = JSON.parse(
     Buffer.from(encoded, "base64").toString("utf8")
@@ -22,10 +19,7 @@ function getFirebaseAdminApp() {
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("Missing RESEND_API_KEY");
-  }
+  if (!apiKey) throw new Error("Missing RESEND_API_KEY");
 
   return new Resend(apiKey);
 }
@@ -34,105 +28,113 @@ function getAppUrl() {
   return process.env.CAMPUSX_APP_URL || "https://www.campus-x.app";
 }
 
+// ✅ fixed escape (important)
 function escapeHtml(value: string) {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      ok: false,
-      error: "Method not allowed",
-    });
+    return res.status(405).json({ ok: false });
   }
 
   try {
     getFirebaseAdminApp();
 
-    const authHeader = req.headers.authorization || "";
-    const idToken = authHeader.replace("Bearer ", "");
-
-    if (!idToken) {
-      return res.status(401).json({
-        ok: false,
-        error: "Missing auth token",
-      });
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) {
+      return res.status(401).json({ ok: false, error: "No token" });
     }
 
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const email = decoded.email?.trim() || "";
+    const decoded = await admin.auth().verifyIdToken(token);
 
-    if (!email) {
-      return res.status(400).json({
+    if (!decoded.email || !decoded.email_verified) {
+      return res.status(403).json({
         ok: false,
-        error: "User email is required",
+        error: "Email not verified",
       });
-    }
-
-    const from = process.env.RESEND_FROM_EMAIL;
-
-    if (!from) {
-      throw new Error("Missing RESEND_FROM_EMAIL");
     }
 
     const resend = getResendClient();
     const appUrl = getAppUrl();
-    const displayName = decoded.name?.trim() || "CampusX user";
+
+    const displayName = decoded.name || "there";
     const safeName = escapeHtml(displayName);
-    const safeAppUrl = escapeHtml(appUrl);
 
-    const { data, error } = await resend.emails.send({
-      from,
-      to: [email],
-      subject: "Welcome to CampusX",
+    const { error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL!, // ✅ set in Vercel
+      to: [decoded.email],
+      subject: "Welcome to CampusX 🎓 – Find rooms & connect",
+
       html: `
-        <div style="font-family: Arial, sans-serif; background:#050505; color:#ffffff; padding:32px;">
-          <div style="max-width:560px; margin:auto; background:#111111; border:1px solid #242424; border-radius:24px; padding:28px;">
-            <p style="font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#8b5cf6; font-weight:800;">
-              CampusX
+        <div style="font-family: Arial; background:#050505; color:#fff; padding:30px;">
+          <div style="max-width:560px; margin:auto; background:#111; padding:28px; border-radius:20px; border:1px solid #222;">
+
+            <p style="text-transform:uppercase; font-size:11px; color:#8b5cf6;">CampusX</p>
+
+            <h1 style="font-size:26px;">Hi ${safeName} 👋</h1>
+
+            <p style="color:#bbb; font-size:14px;">
+              Welcome to CampusX — a trusted student marketplace near Kristu Jayanti University.
             </p>
 
-            <h1 style="margin:8px 0 12px; font-size:26px; line-height:1.2;">
-              Welcome, ${safeName}
-            </h1>
+            <div style="margin:20px 0; font-size:14px;">
+              <p>🏠 Find rooms & PGs near campus</p>
+              <p>💬 Chat directly with students</p>
+              <p>🛍️ Buy/sell essentials easily</p>
+            </div>
 
-            <p style="color:#bdbdbd; font-size:14px; line-height:1.6;">
-              Your account is ready. Complete your profile, browse listings, and start connecting with the KJU community.
+            <p style="font-size:13px; color:#9ca3af;">
+              👉 Complete your profile to unlock posting and faster trust
             </p>
 
-            <a href="${safeAppUrl}" style="display:inline-block; background:#8b5cf6; color:#ffffff; text-decoration:none; padding:14px 20px; border-radius:16px; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:800; margin-top:18px;">
+            <a href="${appUrl}"
+              style="display:inline-block; margin-top:20px; background:#8b5cf6;
+              padding:14px 20px; border-radius:12px; text-decoration:none;
+              color:white; font-weight:bold; font-size:12px;">
               Open CampusX
             </a>
+
+            <p style="margin-top:20px; font-size:12px; color:#666;">
+              See you inside 🚀<br/>— Team CampusX
+            </p>
+
           </div>
         </div>
       `,
-      text: `Welcome to CampusX, ${displayName}\n\nYour account is ready. Complete your profile, browse listings, and start connecting with the KJU community.\n\nOpen CampusX: ${appUrl}`,
+
+      text: `
+Hi ${displayName},
+
+Welcome to CampusX 👋
+
+Find rooms, chat with students and explore listings near Kristu Jayanti University.
+
+Open app:
+${appUrl}
+
+— Team CampusX
+      `,
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw error;
 
-    return res.status(200).json({
-      ok: true,
-      email,
-      messageId: data?.id || null,
-    });
-  } catch (error: any) {
-    console.error("send-welcome-email failed:", {
-      code: error?.code,
-      message: error?.message,
-    });
+    return res.status(200).json({ ok: true });
+
+  } catch (err: any) {
+    console.error(err);
 
     return res.status(500).json({
       ok: false,
-      code: error?.code || "unknown",
-      error: error?.message || "Welcome email failed",
+      error: err.message,
     });
   }
 }
