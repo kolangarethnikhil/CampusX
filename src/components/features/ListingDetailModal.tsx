@@ -599,73 +599,71 @@ export default function ListingDetailModal({
       </div>
 
       {isImageViewerOpen && activePhoto && (
-        <div
-          className="fixed inset-0 z-[190] flex flex-col bg-black"
-          onTouchStart={(event) =>
-            setTouchStartX(event.touches[0]?.clientX ?? null)
-          }
-          onTouchEnd={(event) =>
-            handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)
-          }
-        >
-          <div className="flex h-20 items-center justify-between px-5">
-            <button
-              type="button"
-              
-onClick={(e) => {
-      e.stopPropagation();
-      setIsImageViewerOpen(false);
-    }}
+  <div
+    className="fixed inset-0 z-[1200] flex flex-col bg-black"
+    onTouchStart={(event) =>
+      setTouchStartX(event.touches[0]?.clientX ?? null)
+    }
+    onTouchEnd={(event) =>
+      handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)
+    }
+  >
+    <div className="flex h-20 items-center justify-between px-5">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsImageViewerOpen(false);
+        }}
+        className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white text-black shadow-pro transition-transform duration-150 ease-out active:scale-[0.97]"
+        aria-label="Back to listing"
+      >
+        <ArrowLeft size={23} strokeWidth={2.4} />
+      </button>
 
-              className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white text-black shadow-pro transition-transform duration-150 ease-out active:scale-[0.97]"
-              aria-label="Back to listing"
-            >
-              <ArrowLeft size={23} strokeWidth={2.4} />
-            </button>
+      <p className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white">
+        {activePhotoIndex + 1}/{photos.length}
+      </p>
 
-            <p className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white">
-              {activePhotoIndex + 1}/{photos.length}
-            </p>
+      <div className="h-12 w-12" />
+    </div>
 
-            <div className="h-12 w-12" />
-          </div>
+    <div className="flex min-h-0 flex-1 items-center justify-center px-3 pb-4">
+      <img
+        src={activePhoto}
+        alt={`${listing.title} full photo ${activePhotoIndex + 1}`}
+        className="max-h-full max-w-full object-contain"
+        loading="eager"
+        decoding="async"
+      />
+    </div>
 
-          <div className="flex min-h-0 flex-1 items-center justify-center px-3 pb-4">
+    {hasMultiplePhotos && (
+      <div className="flex gap-3 overflow-x-auto border-t border-white/10 px-5 py-4 scrollbar-hide">
+        {photos.map((photo, index) => (
+          <button
+            key={`${photo}-viewer-thumb-${index}`}
+            type="button"
+            onClick={() => setActivePhotoIndex(index)}
+            className={`h-16 w-20 shrink-0 overflow-hidden rounded-2xl border transition-all ${
+              index === activePhotoIndex
+                ? "border-kjc-accent opacity-100"
+                : "border-white/10 opacity-45"
+            }`}
+          >
             <img
-              src={activePhoto}
-              alt={`${listing.title} full photo ${activePhotoIndex + 1}`}
-              className="max-h-full max-w-full object-contain"
-              loading="eager"
+              src={photo}
+              alt={`${listing.title} viewer thumbnail ${index + 1}`}
+              className="h-full w-full object-cover"
+              loading="lazy"
               decoding="async"
             />
-          </div>
-
-          {hasMultiplePhotos && (
-            <div className="flex gap-3 overflow-x-auto border-t border-white/10 px-5 py-4 scrollbar-hide">
-              {photos.map((photo, index) => (
-                <button
-                  key={`${photo}-viewer-thumb-${index}`}
-                  type="button"
-                  onClick={() => setActivePhotoIndex(index)}
-                  className={`h-16 w-20 shrink-0 overflow-hidden rounded-2xl border transition-all ${
-                    index === activePhotoIndex
-                      ? "border-kjc-accent opacity-100"
-                      : "border-white/10 opacity-45"
-                  }`}
-                >
-                  <img
-                    src={photo}
-                    alt={`${listing.title} viewer thumbnail ${index + 1}`}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+)}
     </>
   );
 }
