@@ -139,6 +139,8 @@ type PendingIntent =
       listingType: ListingType;
     };
 
+const PENDING_INTENT_STORAGE_KEY = "campusx.pendingIntent";
+
 type OptionItem<T extends string> = {
   value: T;
   label: string;
@@ -336,11 +338,6 @@ function BottomNav({
             if (tab.id === "add") {
               void onAddClick();
               return;
-            }
-
-            if (tab.id === "inbox" || tab.id === "me") {
-              const blocked = onRequireAuth({ kind: "tab", tab: tab.id as Tab });
-              if (blocked) return;
             }
 
             onTabChange(tab.id as Tab);
@@ -1771,6 +1768,33 @@ useEffect(() => {
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
+  const persistPendingIntent = (intent: PendingIntent) => {
+    try {
+      window.sessionStorage.setItem(PENDING_INTENT_STORAGE_KEY, JSON.stringify(intent));
+    } catch {
+      // Ignore storage failures and keep the in-memory fallback.
+    }
+  };
+
+  const readPendingIntent = () => {
+    try {
+      const rawIntent = window.sessionStorage.getItem(PENDING_INTENT_STORAGE_KEY);
+      if (!rawIntent) return null;
+
+      return JSON.parse(rawIntent) as PendingIntent;
+    } catch {
+      return null;
+    }
+  };
+
+  const clearPendingIntent = () => {
+    try {
+      window.sessionStorage.removeItem(PENDING_INTENT_STORAGE_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+  };
+
   useEffect(() => {
     if (authModalOpen) {
       document.body.style.overflow = "hidden";
@@ -1783,12 +1807,17 @@ useEffect(() => {
     };
   }, [authModalOpen]);
 
+  const openAuth = () => {
+    setAuthModalOpen(true);
+  };
+
   const openAuthIntro = (intent?: PendingIntent) => {
     if (intent) {
       setPendingIntent(intent);
+      persistPendingIntent(intent);
     }
 
-    setAuthModalOpen(true);
+    openAuth();
   };
 
   const closeAuthIntro = () => {
@@ -1798,11 +1827,14 @@ useEffect(() => {
   const cancelAuthIntro = () => {
     setAuthModalOpen(false);
     setPendingIntent(null);
+    clearPendingIntent();
   };
 
   const requireAuth = (intent: PendingIntent) => {
     if (!user) {
-      openAuthIntro(intent);
+      setPendingIntent(intent);
+      persistPendingIntent(intent);
+      openAuth();
       return true;
     }
 
@@ -1870,7 +1902,17 @@ useEffect(() => {
   }, [user?.uid, profile?.notificationsEnabled]);
 
   useEffect(() => {
-    if (!user || !pendingIntent) return;
+    if (!user) return;
+
+    if (!pendingIntent) {
+      const storedIntent = readPendingIntent();
+      if (storedIntent) {
+        setPendingIntent(storedIntent);
+        return;
+      }
+    }
+
+    if (!pendingIntent) return;
 
     if (!profileCompleted) {
       setProfileGateOpen(true);
@@ -1880,6 +1922,7 @@ useEffect(() => {
     (async () => {
       const intent = pendingIntent;
       setPendingIntent(null);
+      clearPendingIntent();
       await runIntent(intent);
     })();
   }, [user, pendingIntent, profileCompleted]);
@@ -2388,7 +2431,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={() => requireAuth({ kind: "tab", tab: "inbox" })}
+        onClick={openAuth}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view inbox
@@ -2417,7 +2460,7 @@ setMyMarketData(
       </p>
       <button
         type="button"
-        onClick={() => requireAuth({ kind: "tab", tab: "me" })}
+        onClick={openAuth}
         className="rounded-[30px] bg-white px-8 py-5 text-black active:scale-[0.97]"
       >
         Sign in to view profile
