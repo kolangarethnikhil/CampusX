@@ -227,7 +227,7 @@ export default function ListingDetailModal({
               <button
                 type="button"
                 onClick={() => setIsImageViewerOpen(true)}
-                className="block h-full w-full"
+                className="relative z-10 block h-full w-full cursor-pointer"
                 aria-label="Open full image"
               >
                 <img
@@ -245,6 +245,15 @@ export default function ListingDetailModal({
             )}
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
+
+<motion.div
+  initial={{ opacity: 0 }}
+  animate={{ opacity: 1 }}
+  transition={{ duration: 0.3 }}
+  className="pointer-events-none absolute bottom-3 right-3 z-30 rounded-full bg-black/60 px-3 py-2 text-[10px] font-black uppercase tracking-[0.15em] text-white/80 backdrop-blur"
+>
+  Tap to view
+</motion.div>
 
             <div className="absolute left-5 top-5 rounded-full bg-kjc-accent px-4 py-2 text-[9px] font-black uppercase tracking-[0.18em] text-white">
               {isHousing ? formatHousingRoomType(housing.roomType) : market.category}
