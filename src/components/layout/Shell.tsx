@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import LottiePlayer from "../../components/ui/LottiePlayer";
 import homeLoadingRaw from "../../assets/lottie/home-empty?raw";
@@ -1576,6 +1576,7 @@ function Chattery({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [userMap, setUserMap] = useState<Record<string, UserLite>>({});
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -1675,6 +1676,37 @@ function Chattery({
   }, [selectedChat]);
 
   useEffect(() => {
+    if (!selectedChat) return;
+
+    const setChatViewportSize = () => {
+      const viewport = window.visualViewport;
+      const height = viewport?.height ?? window.innerHeight;
+
+      document.documentElement.style.setProperty(
+        "--campusx-chat-viewport-height",
+        `${height}px`
+      );
+    };
+
+    setChatViewportSize();
+
+    window.visualViewport?.addEventListener("resize", setChatViewportSize);
+    window.visualViewport?.addEventListener("scroll", setChatViewportSize);
+    window.addEventListener("resize", setChatViewportSize);
+    window.addEventListener("orientationchange", setChatViewportSize);
+
+    return () => {
+      document.documentElement.style.removeProperty(
+        "--campusx-chat-viewport-height"
+      );
+      window.visualViewport?.removeEventListener("resize", setChatViewportSize);
+      window.visualViewport?.removeEventListener("scroll", setChatViewportSize);
+      window.removeEventListener("resize", setChatViewportSize);
+      window.removeEventListener("orientationchange", setChatViewportSize);
+    };
+  }, [selectedChat]);
+
+  useEffect(() => {
     if (!openConversationId) return;
 
     const matchedConversation = visibleConversations.find(
@@ -1728,6 +1760,14 @@ function Chattery({
     }
   }, [blockedUserIds, selectedChat, user?.uid]);
 
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    window.setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+    }, 40);
+  }, [messages.length, selectedChat?.id]);
+
   const openChat = (conversation: Conversation) => {
     setSelectedChat(conversation);
     void markConversationDelivered(conversation.id);
@@ -1777,12 +1817,12 @@ function Chattery({
         : "";
 
     return (
-      <div className="fixed inset-x-0 top-0 z-[120] flex h-[100dvh] w-full max-w-full flex-col overflow-hidden overflow-x-hidden bg-black">
-        <header className="shrink-0 flex min-w-0 max-w-full items-center gap-4 overflow-x-hidden border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
+      <div className="fixed inset-x-0 top-0 z-[120] flex h-[var(--campusx-chat-viewport-height,100dvh)] w-full max-w-full flex-col overflow-hidden overflow-x-hidden bg-black">
+        <header className="shrink-0 flex min-w-0 max-w-full items-center gap-3 overflow-x-hidden border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl">
           <button
             type="button"
             onClick={closeChat}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 transition active:scale-[0.97]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/5 transition active:scale-[0.97]"
           >
             <ArrowLeft size={22} />
           </button>
@@ -1868,7 +1908,7 @@ function Chattery({
   </div>
 )}
 
-        <div className="min-h-0 min-w-0 max-w-full flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-5 py-6">
+        <div className="scrollbar-hide min-h-0 min-w-0 max-w-full flex-1 space-y-5 overflow-x-hidden overflow-y-auto overscroll-contain px-5 py-6">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/5 text-3xl">
@@ -1913,14 +1953,21 @@ function Chattery({
               );
             })
           )}
+          <div ref={messagesEndRef} />
         </div>
 
-        <div className="shrink-0 flex w-full max-w-full overflow-x-hidden gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <div className="shrink-0 flex w-full max-w-full items-end gap-3 overflow-x-hidden border-t border-white/10 bg-black/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="Type a message..."
-            className="input-pro min-w-0 flex-1"
+            className="input-pro min-h-12 min-w-0 flex-1 rounded-full px-6 py-3 text-[16px]"
+            enterKeyHint="send"
+            onFocus={() => {
+              window.setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ block: "end" });
+              }, 120);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") void handleSend();
             }}
@@ -1930,7 +1977,7 @@ function Chattery({
             type="button"
             onClick={handleSend}
             disabled={!input.trim()}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-kjc-accent transition active:scale-[0.97] disabled:opacity-40"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-kjc-accent transition active:scale-[0.97] disabled:opacity-40"
           >
             <Send size={22} />
           </button>
