@@ -36,13 +36,24 @@
   html {
     background: #0b0b0f;
     scroll-behavior: smooth;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   body {
     @apply font-sans antialiased text-white bg-kjc-black selection:bg-kjc-accent/25;
     -webkit-tap-highlight-color: transparent;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
     text-rendering: geometricPrecision;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   h1,

@@ -1325,12 +1325,14 @@ function Chattery({
   onOpenUserProfile,
   openConversationId,
   onConversationOpened,
+  onConversationStateChange,
   onOpenListing,
   blockedUserIds = [],
 }: {
   onOpenUserProfile: (uid: string) => void;
   openConversationId?: string | null;
   onConversationOpened?: () => void;
+  onConversationStateChange?: (isOpen: boolean) => void;
   onOpenListing?: (conversation: Conversation) => void | Promise<void>;
   blockedUserIds?: string[];
 }) {
@@ -1403,6 +1405,41 @@ function Chattery({
   );
 
   useEffect(() => {
+    onConversationStateChange?.(Boolean(selectedChat));
+
+    return () => {
+      onConversationStateChange?.(false);
+    };
+  }, [onConversationStateChange, selectedChat]);
+
+  useEffect(() => {
+    if (!selectedChat) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousBodyOverflowX = document.body.style.overflowX;
+    const previousBodyWidth = document.body.style.width;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousHtmlOverflowX = document.documentElement.style.overflowX;
+    const previousHtmlWidth = document.documentElement.style.width;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.overflowX = "hidden";
+    document.body.style.width = "100%";
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overflowX = "hidden";
+    document.documentElement.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.overflowX = previousBodyOverflowX;
+      document.body.style.width = previousBodyWidth;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.documentElement.style.overflowX = previousHtmlOverflowX;
+      document.documentElement.style.width = previousHtmlWidth;
+    };
+  }, [selectedChat]);
+
+  useEffect(() => {
     if (!openConversationId) return;
 
     const matchedConversation = visibleConversations.find(
@@ -1462,6 +1499,11 @@ function Chattery({
     void markConversationSeen(conversation.id);
   };
 
+  const closeChat = () => {
+    setSelectedChat(null);
+    onConversationOpened?.();
+  };
+
   const handleSend = async () => {
   const text = input.trim();
   if (!text || !selectedChat) return;
@@ -1500,11 +1542,11 @@ function Chattery({
         : "";
 
     return (
-      <div className="fixed inset-0 z-[120] flex flex-col bg-black">
-        <header className="flex items-center gap-4 border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
+      <div className="fixed inset-0 z-[120] flex w-full max-w-full flex-col overflow-hidden bg-black">
+        <header className="flex min-w-0 items-center gap-4 border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
           <button
             type="button"
-            onClick={() => setSelectedChat(null)}
+            onClick={closeChat}
             className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 transition active:scale-[0.97]"
           >
             <ArrowLeft size={22} />
@@ -1540,11 +1582,11 @@ function Chattery({
           </button>
         </header>
 
-        <div className="border-b border-white/10 px-5 py-4">
+        <div className="min-w-0 border-b border-white/10 px-5 py-4">
           <button
             type="button"
             onClick={() => onOpenListing?.(selectedChat)}
-            className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.05] p-4 text-left transition active:scale-[0.98]"
+            className="flex w-full min-w-0 max-w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.05] p-4 text-left transition active:scale-[0.98]"
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white/5">
               {snapshot.photo ? (
@@ -1591,7 +1633,7 @@ function Chattery({
   </div>
 )}
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-6">
+        <div className="min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-5 py-6">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/5 text-3xl">
@@ -1618,13 +1660,13 @@ function Chattery({
                   className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[82%] rounded-[26px] px-5 py-3 text-sm leading-relaxed shadow-sm ${
+                    className={`min-w-0 max-w-[82%] rounded-[26px] px-5 py-3 text-sm leading-relaxed shadow-sm ${
                       isMe
                         ? "rounded-br-md bg-kjc-accent text-white"
                         : "rounded-bl-md border border-white/10 bg-white/[0.06] text-white/85"
                     }`}
                   >
-                    <p>{message.content}</p>
+                    <p className="break-words">{message.content}</p>
 
                     {isMe && (
                       <div className="mt-2 flex justify-end">
@@ -1638,7 +1680,7 @@ function Chattery({
           )}
         </div>
 
-        <div className="flex gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <div className="flex w-full max-w-full gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -1663,9 +1705,9 @@ function Chattery({
   }
 
   return (
-    <div className="space-y-7">
-      <div className="flex items-end justify-between gap-4">
-        <div>
+    <div className="w-full max-w-full space-y-7 overflow-x-hidden">
+      <div className="flex min-w-0 items-end justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-4xl pro-heading tracking-tighter">Inbox</h2>
           <p className="mt-1 text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
             {totalUnread > 0
@@ -1693,7 +1735,7 @@ function Chattery({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid min-w-0 gap-4">
           {visibleConversations.map((conversation) => {
             const otherUserId = getOtherUserId(conversation);
             const otherUser = otherUserId ? userMap[otherUserId] : null;
@@ -1712,7 +1754,7 @@ function Chattery({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") openChat(conversation);
                 }}
-                className={`relative flex w-full cursor-pointer items-center gap-4 rounded-[32px] border p-4 text-left transition-all duration-200 active:scale-[0.985] ${
+                className={`relative flex w-full min-w-0 cursor-pointer items-center gap-4 rounded-[32px] border p-4 text-left transition-all duration-200 active:scale-[0.985] ${
                   hasUnread
                     ? "border-kjc-accent/45 bg-kjc-accent/[0.12] shadow-[0_0_28px_rgba(139,92,246,0.16)]"
                     : "border-white/10 bg-white/[0.045]"
@@ -1893,6 +1935,7 @@ useEffect(() => {
   const [selectedListingType, setSelectedListingType] = useState<ListingType>("housing");
   const [selectedPoster, setSelectedPoster] = useState<UserLite | null>(null);
   const [chatToOpenId, setChatToOpenId] = useState<string | null>(null);
+  const [isChatDetailOpen, setIsChatDetailOpen] = useState(false);
   const [selectedUserProfile, setSelectedUserProfile] = useState<UserLite | null>(null);
   const [isUserPreviewOpen, setIsUserPreviewOpen] = useState(false);
   const [notificationPrefsOpen, setNotificationPrefsOpen] = useState(false);
@@ -2328,6 +2371,9 @@ setMyMarketData(
 
       setChatToOpenId(conversationId);
       setSelectedListing(null);
+      setSelectedPoster(null);
+      setShowFilters(false);
+      setIsModalOpen(false);
       setActiveTab("inbox");
     } catch (error) {
       console.error(error);
@@ -2459,7 +2505,7 @@ setMyMarketData(
   );
 
   return (
-    <div className="min-h-screen bg-black pb-32 text-white atmo-bg">
+    <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-black pb-32 text-white atmo-bg">
       <Header
         activeTab={activeTab}
         onSearch={setSearchQuery}
@@ -2468,7 +2514,7 @@ setMyMarketData(
         activeFilterCount={activeTab === "home" ? activeHousingFilterCount : 0}
       />
 
-      <main className="mx-auto w-full max-w-2xl px-6 py-10">
+      <main className="mx-auto w-full max-w-[min(42rem,100%)] overflow-x-hidden px-6 py-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -2524,6 +2570,7 @@ setMyMarketData(
       onOpenUserProfile={openUserProfile}
       openConversationId={chatToOpenId}
       onConversationOpened={() => setChatToOpenId(null)}
+      onConversationStateChange={setIsChatDetailOpen}
       onOpenListing={openOriginalListingFromConversation}
       blockedUserIds={blockedUserIds}
     />
@@ -2644,7 +2691,7 @@ setMyMarketData(
         </AnimatePresence>
       </main>
 
-      {!selectedListing && !isModalOpen && !showFilters && (
+      {!selectedListing && !isModalOpen && !showFilters && !isChatDetailOpen && (
   <BottomNav
     activeTab={activeTab}
     onTabChange={setActiveTab}
