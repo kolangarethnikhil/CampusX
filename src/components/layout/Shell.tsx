@@ -1777,8 +1777,8 @@ function Chattery({
         : "";
 
     return (
-      <div className="fixed inset-0 z-[120] flex w-full max-w-full flex-col overflow-hidden bg-black">
-        <header className="flex min-w-0 items-center gap-4 border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
+      <div className="fixed inset-x-0 top-0 z-[120] flex h-[100dvh] w-full max-w-full flex-col overflow-hidden overflow-x-hidden bg-black">
+        <header className="shrink-0 flex min-w-0 max-w-full items-center gap-4 overflow-x-hidden border-b border-white/10 bg-black/95 px-5 py-4 backdrop-blur-xl">
           <button
             type="button"
             onClick={closeChat}
@@ -1817,7 +1817,7 @@ function Chattery({
           </button>
         </header>
 
-        <div className="min-w-0 border-b border-white/10 px-5 py-4">
+        <div className="shrink-0 min-w-0 max-w-full overflow-x-hidden border-b border-white/10 px-5 py-4">
           <button
             type="button"
             onClick={() => onOpenListing?.(selectedChat)}
@@ -1861,14 +1861,14 @@ function Chattery({
           </button>
         </div>
         {snapshot.status !== "available" && (
-  <div className="mx-4 mb-4 rounded-xl bg-rose-500/10 p-3 text-center text-xs font-black text-rose-400">
+  <div className="mx-4 mb-4 shrink-0 rounded-xl bg-rose-500/10 p-3 text-center text-xs font-black text-rose-400">
     {snapshot.status === "sold"
       ? "This item has been sold"
       : "This listing is no longer available"}
   </div>
 )}
 
-        <div className="min-w-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-5 py-6">
+        <div className="min-h-0 min-w-0 max-w-full flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-5 py-6">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-white/5 text-3xl">
@@ -1915,7 +1915,7 @@ function Chattery({
           )}
         </div>
 
-        <div className="flex w-full max-w-full gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <div className="shrink-0 flex w-full max-w-full overflow-x-hidden gap-3 border-t border-white/10 bg-black/95 p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
