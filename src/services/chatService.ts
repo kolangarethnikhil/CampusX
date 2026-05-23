@@ -24,12 +24,12 @@ export interface ListingSnapshot {
   id: string;
   type: ListingType;
   title: string;
-  price?: number;
-  photo?: string;
-  location?: string;
-  statusAtStart?: string;
-  roomType?: string;
-  category?: string;
+  price?: number | null;
+  photo?: string | null;
+  location?: string | null;
+  statusAtStart?: string | null;
+  roomType?: string | null;
+  category?: string | null;
   createdAt?: unknown;
 }
 
@@ -75,10 +75,10 @@ export interface Message {
 }
 
 export interface ListingMetadata {
-  listingPhoto?: string;
-  listingPrice?: number;
-  listingStatus?: string;
-  listingLocation?: string;
+  listingPhoto?: string | null;
+  listingPrice?: number | null;
+  listingStatus?: string | null;
+  listingLocation?: string | null;
   listingSnapshot?: ListingSnapshot;
 }
 
@@ -104,6 +104,11 @@ function getParticipantsKey(participants: string[]) {
 
 function getOtherParticipant(conversation: Conversation, currentUserId: string) {
   return conversation.participants.find((id) => id !== currentUserId);
+}
+
+function nullableString(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 async function notifyReceiver(conversationId: string, message: string) {
@@ -188,15 +193,34 @@ export async function startConversation(
       listingType: normalizedListingType,
       listingOwnerId: trimmedOwnerId,
     });
-    const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
+    const listingPhoto =
+      nullableString(metadata?.listingSnapshot?.photo) ??
+      nullableString(metadata?.listingPhoto);
+    const listingPrice =
+      metadata?.listingSnapshot?.price ?? metadata?.listingPrice ?? null;
+    const listingStatus =
+      nullableString(metadata?.listingSnapshot?.statusAtStart) ??
+      nullableString(metadata?.listingStatus) ??
+      "available";
+    const listingLocation =
+      nullableString(metadata?.listingSnapshot?.location) ??
+      nullableString(metadata?.listingLocation) ??
+      "Near KJU";
+
+    const listingSnapshot: ListingSnapshot = {
       id: trimmedListingId,
       type: normalizedListingType,
-      title: listingTitle,
-      price: metadata?.listingPrice,
-      photo: metadata?.listingPhoto,
-      location: metadata?.listingLocation,
-      statusAtStart: metadata?.listingStatus,
-      createdAt: serverTimestamp(),
+      title:
+        nullableString(metadata?.listingSnapshot?.title) ??
+        nullableString(listingTitle) ??
+        "CampusX listing",
+      price: listingPrice,
+      photo: listingPhoto,
+      location: listingLocation,
+      statusAtStart: listingStatus,
+      roomType: nullableString(metadata?.listingSnapshot?.roomType),
+      category: nullableString(metadata?.listingSnapshot?.category),
+      createdAt: metadata?.listingSnapshot?.createdAt ?? serverTimestamp(),
     };
 
     await setDoc(conversationRef, {
@@ -204,15 +228,15 @@ export async function startConversation(
       participantsKey,
 
       listingId: trimmedListingId,
-      listingTitle,
+      listingTitle: listingSnapshot.title,
       listingType: normalizedListingType,
 
       listingSnapshot,
 
-      listingPhoto: metadata?.listingPhoto || listingSnapshot.photo || "",
-      listingPrice: metadata?.listingPrice || listingSnapshot.price || 0,
-      listingStatus: metadata?.listingStatus || listingSnapshot.statusAtStart || "",
-      listingLocation: metadata?.listingLocation || listingSnapshot.location || "",
+      listingPhoto,
+      listingPrice,
+      listingStatus,
+      listingLocation,
 
       lastMessage: "",
       lastMessageSenderId: "",

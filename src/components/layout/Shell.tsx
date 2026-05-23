@@ -2308,7 +2308,7 @@ setMyMarketData(
 
       const listingMetadata = listing
         ? {
-            listingPhoto: listing.photos?.[0],
+            listingPhoto: listing.photos?.[0] || null,
             listingPrice: "rent" in listing ? listing.rent : listing.price,
             listingStatus: listing.status,
             listingLocation:
