@@ -91,6 +91,10 @@ function getCurrentUserId() {
     throw new Error("You must be signed in to use chat.");
   }
 
+  if (!user.uid) {
+    throw new Error("Your session is missing a user ID. Please sign in again.");
+  }
+
   return user.uid;
 }
 
@@ -134,19 +138,30 @@ export async function startConversation(
   metadata?: ListingMetadata
 ): Promise<string> {
   const currentUserId = getCurrentUserId();
+  const trimmedOwnerId = ownerId.trim();
+  const trimmedListingId = listingId.trim();
 
-  if (ownerId === currentUserId) {
+  if (!trimmedOwnerId) {
+    throw new Error("This listing owner is unavailable. Please try another listing.");
+  }
+
+  if (!trimmedListingId) {
+    throw new Error("This listing is unavailable. Please refresh and try again.");
+  }
+
+  if (trimmedOwnerId === currentUserId) {
     throw new Error("You cannot start a chat with yourself.");
   }
 
-  const participants = [currentUserId, ownerId];
+  const participants = [currentUserId, trimmedOwnerId];
   const participantsKey = getParticipantsKey(participants);
 
   try {
     const existingQuery = query(
       collection(db, COLLECTION_NAME),
+      where("participants", "array-contains", currentUserId),
       where("participantsKey", "==", participantsKey),
-      where("listingId", "==", listingId),
+      where("listingId", "==", trimmedListingId),
       limit(1)
     );
 
@@ -168,13 +183,13 @@ export async function startConversation(
     const normalizedListingType: ListingType =
       listingType === "housing" ? "housing" : "market";
 
-      await trackChatStarted({
-  listingId,
-  listingType: normalizedListingType,
-  listingOwnerId: ownerId,
-});
+    await trackChatStarted({
+      listingId: trimmedListingId,
+      listingType: normalizedListingType,
+      listingOwnerId: trimmedOwnerId,
+    });
     const listingSnapshot: ListingSnapshot = metadata?.listingSnapshot || {
-      id: listingId,
+      id: trimmedListingId,
       type: normalizedListingType,
       title: listingTitle,
       price: metadata?.listingPrice,
@@ -188,7 +203,7 @@ export async function startConversation(
       participants,
       participantsKey,
 
-      listingId,
+      listingId: trimmedListingId,
       listingTitle,
       listingType: normalizedListingType,
 
@@ -205,7 +220,7 @@ export async function startConversation(
 
       unreadBy: {
         [currentUserId]: 0,
-        [ownerId]: 0,
+        [trimmedOwnerId]: 0,
       },
 
       lastDeliveredAtBy: {},

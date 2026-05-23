@@ -323,49 +323,66 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
-      allow list: if signedIn();
+  allow get, list: if signedIn()
+    && request.auth.uid in resource.data.participants;
 
-      allow get: if signedIn()
-        && request.auth.uid in resource.data.participants;
+  allow create: if signedIn()
+    && incoming().participants is list
+    && incoming().participants.hasAny([request.auth.uid])
+    && incoming().participants.size() >= 2
+    && incoming().participants.size() <= 10;
 
-      allow create: if signedIn()
-        && incoming().participants is list
-        && request.auth.uid in incoming().participants
-        && incoming().participants.size() >= 2
-        && incoming().participants.size() <= 10;
+  allow update: if signedIn()
+    && request.auth.uid in resource.data.participants
+    && incoming().participants == existing().participants
+    && incoming().listingId == existing().listingId
+    && incoming().listingTitle == existing().listingTitle
+    && incoming().listingType == existing().listingType
+    && (!('listingSnapshot' in existing()) || incoming().listingSnapshot == existing().listingSnapshot)
+    && (!('listingPhoto' in existing()) || incoming().listingPhoto == existing().listingPhoto)
+    && (!('listingPrice' in existing()) || incoming().listingPrice == existing().listingPrice)
+    && (!('listingStatus' in existing()) || incoming().listingStatus == existing().listingStatus)
+    && (!('listingLocation' in existing()) || incoming().listingLocation == existing().listingLocation)
+    && incoming().createdAt == existing().createdAt
+    && incoming().diff(existing()).affectedKeys().hasOnly([
+      'lastMessage',
+      'lastMessageSenderId',
+      'lastMessageAt',
+      'unreadBy',
+      'lastDeliveredAtBy',
+      'lastReadAtBy',
+      'updatedAt'
+    ]);
 
-      allow update: if signedIn()
-        && request.auth.uid in resource.data.participants;
+  allow delete: if false;
 
-      allow delete: if false;
+  match /messages/{messageId} {
+    allow read: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants;
 
-      match /messages/{messageId} {
-        allow read: if signedIn()
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants;
+    allow create: if signedIn()
+      && incoming().senderId == request.auth.uid
+      && validString(incoming().content, 1000)
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants;
 
-        allow create: if signedIn()
-          && incoming().senderId == request.auth.uid
-          && validString(incoming().content, 1000)
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants;
+    allow update: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants
+      && incoming().diff(existing()).affectedKeys().hasOnly([
+        'status',
+        'deliveredAt',
+        'seenAt',
+        'readBy'
+      ]);
 
-        allow update: if signedIn()
-          && request.auth.uid in get(
-            /databases/$(database)/documents/conversations/$(conversationId)
-          ).data.participants
-          && incoming().diff(existing()).affectedKeys().hasOnly([
-            'status',
-            'deliveredAt',
-            'seenAt',
-            'readBy'
-          ]);
-
-        allow delete: if false;
-      }
-    }
+    allow delete: if false;
+  }
+}
 
     match /listing_reports/{reportId} {
       allow create: if signedIn()
@@ -437,12 +454,3 @@ service cloud.firestore {
     }
   }
 }
-``
-            incoming().communityIntent in ['explore', 'utility', 'business', 'other'])
-          &&
-          (!('notificationsEnabled' in incoming()) ||
-            incoming().notificationsEnabled is bool)
-          &&
-          (!('marketingOptIn' in incoming()) ||
-            incoming().marketingOptIn is bool)
-          &&

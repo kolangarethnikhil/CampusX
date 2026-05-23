@@ -42,10 +42,7 @@ import {
   isListingExpired,
   isPublicListingVisible,
 } from "../../utils/listingLifecycle";
-import {
-  trackChatStarted,
-  trackListingView,
-} from "../../services/listingViewsService";
+import { trackListingView } from "../../services/listingViewsService";
 
 import ListingForm from "../features/ListingForm";
 import VerificationModal from "../features/VerificationModal";
@@ -2329,18 +2326,12 @@ setMyMarketData(
         listingMetadata
       );
 
-      await trackChatStarted({
-        listingId,
-        listingType: type === "housing" ? "housing" : "market",
-        listingOwnerId: ownerId,
-      });
-
       setChatToOpenId(conversationId);
       setSelectedListing(null);
       setActiveTab("inbox");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not start chat");
+      alert("Could not start chat right now. Please refresh and try again.");
     }
   };
 
