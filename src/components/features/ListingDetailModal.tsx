@@ -70,6 +70,27 @@ interface ListingDetailModalProps {
   onBlockUser?: (userId: string) => void | Promise<void>;
 }
 
+type SonnerToastVariant = "success" | "error";
+
+const SONNER_TOAST_EVENT = "campusx:sonner-toast";
+
+const toast = {
+  success: (title: string) => dispatchSonnerToast(title, "success"),
+  error: (title: string) => dispatchSonnerToast(title, "error"),
+};
+
+function dispatchSonnerToast(title: string, variant: SonnerToastVariant) {
+  window.dispatchEvent(
+    new CustomEvent(SONNER_TOAST_EVENT, {
+      detail: {
+        id: Date.now() + Math.random(),
+        title,
+        variant,
+      },
+    })
+  );
+}
+
 function formatDateLabel(value?: string) {
   if (!value) return "Immediately";
 
@@ -212,9 +233,10 @@ Rooms, items & more — built around the KJU student community`;
     }
 
     await navigator.clipboard.writeText(`${shareText}\n\n👉 ${shareUrl}`);
-    alert("Copied! Paste it on WhatsApp or Instagram 🚀");
+    toast.success("Copied. Paste it on WhatsApp or Instagram.");
   } catch (error) {
     console.error("Share failed:", error);
+    toast.error("Could not share this listing.");
   }
 };
 
@@ -598,6 +620,26 @@ Rooms, items & more — built around the KJU student community`;
                   <Edit3 size={16} />
                 </button>
 
+                {status === "available" ? (
+                  <button
+                    type="button"
+                    onClick={() => onCloseListing?.(listing, type)}
+                    className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-kjc-accent/20 bg-kjc-accent/10 py-5 text-[10px] font-black uppercase tracking-[0.24em] text-kjc-accent transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Close post
+                    <RotateCcw size={16} />
+                  </button>
+                ) : status !== "deleted" ? (
+                  <button
+                    type="button"
+                    onClick={() => onReopenListing?.(listing, type)}
+                    className="flex w-full items-center justify-center gap-3 rounded-[28px] border border-emerald-500/20 bg-emerald-500/10 py-5 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300 transition-transform duration-150 ease-out active:scale-[0.97]"
+                  >
+                    Reopen post
+                    <RotateCcw size={16} />
+                  </button>
+                ) : null}
+
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -738,3 +780,4 @@ Rooms, items & more — built around the KJU student community`;
     </>
   );
 }
+

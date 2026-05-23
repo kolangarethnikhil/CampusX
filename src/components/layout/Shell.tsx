@@ -144,6 +144,54 @@ type OptionItem<T extends string> = {
   label: string;
 };
 
+type SonnerToastVariant = "success" | "error";
+
+type SonnerToastPayload = {
+  id: number;
+  title: string;
+  variant: SonnerToastVariant;
+};
+
+type ConfirmationIntent =
+  | {
+      kind: "delete";
+      listing: HousingListing | MarketListing;
+      type: ListingType;
+    }
+  | {
+      kind: "close";
+      listing: HousingListing | MarketListing;
+      type: ListingType;
+    }
+  | {
+      kind: "block";
+      userId: string;
+    };
+
+type RenewIntent = {
+  listing: HousingListing | MarketListing;
+  type: ListingType;
+};
+
+const SONNER_TOAST_EVENT = "campusx:sonner-toast";
+
+const toast = {
+  success: (title: string) => dispatchSonnerToast(title, "success"),
+  error: (title: string) => dispatchSonnerToast(title, "error"),
+};
+
+function dispatchSonnerToast(title: string, variant: SonnerToastVariant) {
+  window.dispatchEvent(
+    new CustomEvent<SonnerToastPayload>(SONNER_TOAST_EVENT, {
+      detail: {
+        id: Date.now() + Math.random(),
+        title,
+        variant,
+      },
+    })
+  );
+}
+
 const initialHousingFilters: HousingFilters = {
   roomType: "All",
   maxRent: "",
@@ -219,6 +267,198 @@ function applyHousingFilters(listings: HousingListing[], filters: HousingFilters
 
     return true;
   });
+}
+
+function SonnerToaster() {
+  const [items, setItems] = useState<SonnerToastPayload[]>([]);
+
+  useEffect(() => {
+    const handleToast = (event: Event) => {
+      const toastEvent = event as CustomEvent<SonnerToastPayload>;
+      const nextToast = toastEvent.detail;
+
+      setItems((current) => [...current, nextToast].slice(-3));
+
+      window.setTimeout(() => {
+        setItems((current) => current.filter((item) => item.id !== nextToast.id));
+      }, 3400);
+    };
+
+    window.addEventListener(SONNER_TOAST_EVENT, handleToast);
+
+    return () => {
+      window.removeEventListener(SONNER_TOAST_EVENT, handleToast);
+    };
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none fixed right-4 top-4 z-[1500] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-3">
+      {items.map((item) => (
+        <motion.div
+          key={item.id}
+          initial={{ opacity: 0, y: -10, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          className={`rounded-[26px] border px-5 py-4 shadow-pro-lg ${
+            item.variant === "success"
+              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+              : "border-rose-400/25 bg-rose-500/10 text-rose-100"
+          }`}
+        >
+          <p className="text-[10px] font-black uppercase tracking-[0.22em]">
+            {item.variant === "success" ? "Success" : "Error"}
+          </p>
+          <p className="mt-1 text-sm font-bold leading-relaxed text-white/85">
+            {item.title}
+          </p>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function AlertDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  busy,
+  variant = "danger",
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  busy?: boolean;
+  variant?: "danger" | "accent";
+  onCancel: () => void;
+  onConfirm: () => void | Promise<void>;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1450] flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        onClick={busy ? undefined : onCancel}
+        className="absolute inset-0 bg-black/85"
+        aria-label="Cancel confirmation"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="relative w-full max-w-md rounded-t-[38px] border border-white/10 bg-black p-7 shadow-pro-lg sm:rounded-[38px]"
+      >
+        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+          Confirm action
+        </p>
+        <h2 className="mt-2 text-3xl pro-heading tracking-tighter text-white">
+          {title}
+        </h2>
+        <p className="mt-3 text-sm font-medium leading-relaxed text-white/55">
+          {description}
+        </p>
+
+        <div className="mt-7 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-[24px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-40"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className={`rounded-[24px] border py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-50 ${
+              variant === "danger"
+                ? "border-rose-500/20 bg-rose-500/15 text-rose-300"
+                : "border-kjc-accent/20 bg-kjc-accent/15 text-kjc-accent"
+            }`}
+          >
+            {busy ? "Working" : confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function RenewDurationDialog({
+  open,
+  busy,
+  onClose,
+  onSelect,
+}: {
+  open: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onSelect: (duration: 15 | 30) => void | Promise<void>;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[1450] flex items-end justify-center p-4 sm:items-center">
+      <button
+        type="button"
+        onClick={busy ? undefined : onClose}
+        className="absolute inset-0 bg-black/85"
+        aria-label="Close renew duration"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="relative w-full max-w-md rounded-t-[38px] border border-white/10 bg-black p-7 shadow-pro-lg sm:rounded-[38px]"
+      >
+        <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/35">
+          Renew listing
+        </p>
+        <h2 className="mt-2 text-3xl pro-heading tracking-tighter text-white">
+          Choose duration
+        </h2>
+        <p className="mt-3 text-sm font-medium leading-relaxed text-white/55">
+          Keep your post visible in the public feed for a fresh listing window.
+        </p>
+
+        <div className="mt-7 grid grid-cols-2 gap-3">
+          {[15, 30].map((duration) => (
+            <button
+              key={duration}
+              type="button"
+              onClick={() => onSelect(duration as 15 | 30)}
+              disabled={busy}
+              className="rounded-[28px] border border-kjc-accent/20 bg-kjc-accent/10 px-5 py-5 text-left transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-50"
+            >
+              <span className="block text-3xl pro-heading text-white">
+                {duration}
+              </span>
+              <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.22em] text-kjc-accent">
+                days
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          className="mt-3 w-full rounded-[24px] border border-white/10 bg-white/5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/50 transition-transform duration-150 ease-out active:scale-[0.97] disabled:opacity-40"
+        >
+          Cancel
+        </button>
+      </motion.div>
+    </div>
+  );
 }
 
 function DarkOptionPicker<T extends string>({
@@ -568,48 +808,43 @@ function ListingCard({
   const locationDisplay = isHousing
     ? getHousingLocationDisplay(housingListing).compact
     : listing.formattedAddress?.split(",")[0] || "Near KJU";
-    const handleShareCard = async (event: React.MouseEvent) => {
-  event.stopPropagation();
+  const handleShareCard = async (event: React.MouseEvent) => {
+    event.stopPropagation();
 
-  const shareUrl = `${window.location.origin}/?listingType=${type}&listingId=${listing.id}`;
-  const listingKind = isHousing ? "room" : "item";
-
-  const priceLabel = isHousing
-    ? `₹${Number(price).toLocaleString()} / month`
-    : `₹${Number(price).toLocaleString()}`;
-
-  const emoji = isHousing ? "🏠" : "📦";
-
-  const hookLine = isHousing
-    ? `Found a ${housingListing.roomType || "room"} near KJU — no broker, direct from student.`
-    : `${listing.title} available — student selling, no middleman.`;
-
-  const shareText = `${emoji} ${listing.title}
+    const shareUrl = `${window.location.origin}/?listingType=${type}&listingId=${listing.id}`;
+    const priceLabel = isHousing
+      ? `Rs ${Number(price).toLocaleString()} / month`
+      : `Rs ${Number(price).toLocaleString()}`;
+    const hookLine = isHousing
+      ? `Found a ${housingListing.roomType || "room"} near KJU - no broker, direct from student.`
+      : `${listing.title} available - student selling, no middleman.`;
+    const shareText = `${listing.title}
 
 ${priceLabel}
-📍 ${locationDisplay}
+Location: ${locationDisplay}
 
 ${hookLine}
 
-🎓 CampusX · campus-x.app
-Rooms, items & more — built around the KJU student community`;
+CampusX - campus-x.app
+Rooms, items and more - built around the KJU student community`;
 
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: listing.title,
-        text: shareText,
-        url: shareUrl,
-      });
-      return;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: listing.title,
+          text: shareText,
+          url: shareUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+      toast.success("Copied. Paste it on WhatsApp or Instagram.");
+    } catch (error) {
+      console.error("Share failed:", error);
+      toast.error("Could not share this listing.");
     }
-
-    await navigator.clipboard.writeText(`${shareText}\n\n👉 ${shareUrl}`);
-    alert("Copied! Paste it on WhatsApp or Instagram 🚀");
-  } catch (error) {
-    console.error("Share failed:", error);
-  }
-};
+  };
 
   return (
     <motion.div
@@ -1159,10 +1394,10 @@ function HousingFilterModal({
     }));
   };
 
-  const apply = () => {
+const apply = () => {
   onChange(draft);
   onClose();
-  alert("Filters applied"); // temp for launch
+  toast.success("Filters applied.");
 };
 
   return (
@@ -1511,12 +1746,12 @@ function Chattery({
   const snapshot = getConversationListingSnapshot(selectedChat);
 
   if (snapshot.status === "sold") {
-    alert("This item has already been sold.");
+    toast.error("This item has already been sold.");
     return;
   }
 
   if (snapshot.status === "deleted") {
-    alert("This listing is no longer available.");
+    toast.error("This listing is no longer available.");
     return;
   }
 
@@ -1943,6 +2178,10 @@ useEffect(() => {
 
   const [editingListing, setEditingListing] = useState<HousingListing | MarketListing | null>(null);
   const [editingListingType, setEditingListingType] = useState<ListingType>("housing");
+  const [confirmationIntent, setConfirmationIntent] = useState<ConfirmationIntent | null>(null);
+  const [confirmationBusy, setConfirmationBusy] = useState(false);
+  const [renewIntent, setRenewIntent] = useState<RenewIntent | null>(null);
+  const [renewBusy, setRenewBusy] = useState(false);
 
   const { user, profile, profileCompleted, signIn, logout, loading: authLoading } = useAuth();
   
@@ -2127,7 +2366,7 @@ setMyMarketData(
       const snapshot = await getDoc(doc(db, collectionName, listingId));
 
       if (!snapshot.exists()) {
-        alert("This listing is no longer available.");
+        toast.error("This listing is no longer available.");
         window.history.replaceState({}, "", window.location.pathname);
         return;
       }
@@ -2142,7 +2381,7 @@ setMyMarketData(
       window.history.replaceState({}, "", window.location.pathname);
     } catch (error) {
       console.error("Failed to open shared listing:", error);
-      alert("Could not open this listing.");
+      toast.error("Could not open this listing.");
       window.history.replaceState({}, "", window.location.pathname);
     }
   }
@@ -2160,14 +2399,14 @@ setMyMarketData(
             : null;
 
       if (!collectionName) {
-        alert("Original post is no longer available.");
+        toast.error("Original post is no longer available.");
         return;
       }
 
       const snapshot = await getDoc(doc(db, collectionName, conversation.listingId));
 
       if (!snapshot.exists()) {
-        alert("Original post is no longer available.");
+        toast.error("Original post is no longer available.");
         return;
       }
 
@@ -2177,7 +2416,7 @@ setMyMarketData(
       );
     } catch (error) {
       console.error(error);
-      alert("Original post is no longer available.");
+      toast.error("Original post is no longer available.");
     }
   };
 
@@ -2188,7 +2427,7 @@ setMyMarketData(
 
   const handleEditListing = (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user || listing.postedBy !== user.uid) {
-      alert("You can only edit your own post.");
+      toast.error("You can only edit your own post.");
       return;
     }
 
@@ -2199,13 +2438,14 @@ setMyMarketData(
 
   const handleDeleteListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user || listing.postedBy !== user.uid) {
-      alert("You can only delete your own post.");
+      toast.error("You can only delete your own post.");
       return;
     }
 
-    const confirmed = window.confirm("Delete this post? It will be hidden from public feed.");
-    if (!confirmed) return;
+    setConfirmationIntent({ kind: "delete", listing, type });
+  };
 
+  const confirmDeleteListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     try {
       if (type === "housing") {
   await updateHousingListing(listing.id, {
@@ -2219,18 +2459,23 @@ setMyMarketData(
 
       closeListingDetail();
       await loadData();
+      toast.success("Post deleted.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not delete post");
+      toast.error(error instanceof Error ? error.message : "Could not delete post.");
     }
   };
 
   const handleCloseListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user || listing.postedBy !== user.uid) {
-      alert("You can only close your own post.");
+      toast.error("You can only close your own post.");
       return;
     }
 
+    setConfirmationIntent({ kind: "close", listing, type });
+  };
+
+  const confirmCloseListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     try {
       if (type === "housing") {
         await closeHousingListing(listing.id);
@@ -2240,15 +2485,16 @@ setMyMarketData(
 
       closeListingDetail();
       await loadData();
+      toast.success("Post closed.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not close post");
+      toast.error(error instanceof Error ? error.message : "Could not close post.");
     }
   };
 
   const handleReopenListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user || listing.postedBy !== user.uid) {
-      alert("You can only reopen your own post.");
+      toast.error("You can only reopen your own post.");
       return;
     }
 
@@ -2261,26 +2507,27 @@ setMyMarketData(
 
       closeListingDetail();
       await loadData();
+      toast.success("Post reopened.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not reopen post");
+      toast.error(error instanceof Error ? error.message : "Could not reopen post.");
     }
   };
 
   const handleRenewListing = async (listing: HousingListing | MarketListing, type: ListingType) => {
     if (!user || listing.postedBy !== user.uid) {
-      alert("You can only renew your own post.");
+      toast.error("You can only renew your own post.");
       return;
     }
 
-    const choice = window.prompt("Renew for how many days? Type 15 or 30", "30");
-    const duration = Number(choice);
+    setRenewIntent({ listing, type });
+  };
 
-    if (duration !== 15 && duration !== 30) {
-      alert("Please enter 15 or 30.");
-      return;
-    }
+  const submitRenewListing = async (duration: 15 | 30) => {
+    if (!renewIntent) return;
 
+    const { listing, type } = renewIntent;
+    setRenewBusy(true);
     try {
       if (type === "housing") {
         await renewHousingListing(listing.id, duration);
@@ -2289,9 +2536,13 @@ setMyMarketData(
       }
 
       await loadData();
+      setRenewIntent(null);
+      toast.success(`Post renewed for ${duration} days.`);
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not renew post");
+      toast.error(error instanceof Error ? error.message : "Could not renew post.");
+    } finally {
+      setRenewBusy(false);
     }
   };
 
@@ -2305,9 +2556,10 @@ setMyMarketData(
 
     closeListingDetail();
     await loadData();
+    toast.success("Marked as sold.");
   } catch (error) {
     console.error(error);
-    alert("Could not mark as sold");
+    toast.error("Could not mark as sold.");
   }
 };
 
@@ -2315,7 +2567,7 @@ setMyMarketData(
     if (!user) return;
 
     if (listing.postedBy === user.uid) {
-      alert("You cannot report your own post.");
+      toast.error("You cannot report your own post.");
       return;
     }
 
@@ -2332,12 +2584,12 @@ setMyMarketData(
     if (!user) return;
 
     if (ownerId === user.uid) {
-      alert("This is your own post. Use Manage post to edit or close it.");
+      toast.error("This is your own post. Use Manage post to edit or close it.");
       return;
     }
 
     if (blockedUserIds.includes(ownerId)) {
-      alert("You blocked this user. Unblock them before starting a chat.");
+      toast.error("You blocked this user. Unblock them before starting a chat.");
       return;
     }
 
@@ -2377,7 +2629,7 @@ setMyMarketData(
       setActiveTab("inbox");
     } catch (error) {
       console.error(error);
-      alert("Could not start chat right now. Please refresh and try again.");
+      toast.error("Could not start chat right now. Please refresh and try again.");
     }
   };
 
@@ -2441,16 +2693,14 @@ setMyMarketData(
     }
 
     if (user.uid === userIdToBlock) {
-      alert("You cannot block yourself.");
+      toast.error("You cannot block yourself.");
       return;
     }
 
-    const confirmed = window.confirm(
-      "Block this user? Their posts and chats will be hidden for you."
-    );
+    setConfirmationIntent({ kind: "block", userId: userIdToBlock });
+  };
 
-    if (!confirmed) return;
-
+  const confirmBlockUser = async (userIdToBlock: string) => {
     try {
       await blockUser(userIdToBlock);
 
@@ -2463,10 +2713,29 @@ setMyMarketData(
 
       closeListingDetail();
 
-      alert("User blocked.");
+      toast.success("User blocked.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Could not block user.");
+      toast.error(error instanceof Error ? error.message : "Could not block user.");
+    }
+  };
+
+  const confirmPendingAction = async () => {
+    if (!confirmationIntent) return;
+
+    setConfirmationBusy(true);
+    try {
+      if (confirmationIntent.kind === "delete") {
+        await confirmDeleteListing(confirmationIntent.listing, confirmationIntent.type);
+      } else if (confirmationIntent.kind === "close") {
+        await confirmCloseListing(confirmationIntent.listing, confirmationIntent.type);
+      } else {
+        await confirmBlockUser(confirmationIntent.userId);
+      }
+
+      setConfirmationIntent(null);
+    } finally {
+      setConfirmationBusy(false);
     }
   };
 
@@ -2504,8 +2773,33 @@ setMyMarketData(
     housingFilters
   );
 
+  const confirmationCopy = confirmationIntent
+    ? confirmationIntent.kind === "delete"
+      ? {
+          title: "Delete this post?",
+          description: "It will be hidden from the public feed and removed from active discovery.",
+          confirmLabel: "Delete",
+          variant: "danger" as const,
+        }
+      : confirmationIntent.kind === "close"
+        ? {
+            title: "Close this post?",
+            description: "Students will no longer be able to start new chats from this listing.",
+            confirmLabel: "Close",
+            variant: "accent" as const,
+          }
+        : {
+            title: "Block this user?",
+            description: "Their posts and chats will be hidden for you.",
+            confirmLabel: "Block",
+            variant: "danger" as const,
+          }
+    : null;
+
   return (
     <div className="min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-black pb-32 text-white atmo-bg">
+      <SonnerToaster />
+
       <Header
         activeTab={activeTab}
         onSearch={setSearchQuery}
@@ -2801,6 +3095,24 @@ setMyMarketData(
       <ForegroundNotificationToast
         payload={foregroundPush}
         onClose={() => setForegroundPush(null)}
+      />
+
+      <AlertDialog
+        open={Boolean(confirmationCopy)}
+        title={confirmationCopy?.title || ""}
+        description={confirmationCopy?.description || ""}
+        confirmLabel={confirmationCopy?.confirmLabel || "Confirm"}
+        variant={confirmationCopy?.variant}
+        busy={confirmationBusy}
+        onCancel={() => setConfirmationIntent(null)}
+        onConfirm={confirmPendingAction}
+      />
+
+      <RenewDurationDialog
+        open={Boolean(renewIntent)}
+        busy={renewBusy}
+        onClose={() => setRenewIntent(null)}
+        onSelect={submitRenewListing}
       />
 
       {authModalOpen && (
