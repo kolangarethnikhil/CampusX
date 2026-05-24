@@ -26,6 +26,16 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= max);
     }
 
+    function listingCountersUnchanged() {
+      return !incoming().diff(existing()).affectedKeys().hasAny([
+        'viewsCount',
+        'uniqueViewersCount',
+        'chatStartedCount',
+        'lastViewedAt',
+        'lastChatStartedAt'
+      ]);
+    }
+
     match /users/{userId} {
       allow get: if signedIn();
       allow list: if false;
@@ -171,19 +181,8 @@ service cloud.firestore {
           (
             isOwner(existing().postedBy)
             && incoming().postedBy == existing().postedBy
+            && listingCountersUnchanged()
             && validHousingListing(incoming())
-          )
-          ||
-          (
-            request.auth.uid != existing().postedBy
-            && incoming().diff(existing()).affectedKeys().hasOnly([
-              'viewsCount',
-              'uniqueViewersCount',
-              'chatStartedCount',
-              'lastViewedAt',
-              'lastChatStartedAt',
-              'updatedAt'
-            ])
           )
         );
 
@@ -240,19 +239,8 @@ service cloud.firestore {
           (
             isOwner(existing().postedBy)
             && incoming().postedBy == existing().postedBy
+            && listingCountersUnchanged()
             && validMarketplaceListing(incoming())
-          )
-          ||
-          (
-            request.auth.uid != existing().postedBy
-            && incoming().diff(existing()).affectedKeys().hasOnly([
-              'viewsCount',
-              'uniqueViewersCount',
-              'chatStartedCount',
-              'lastViewedAt',
-              'lastChatStartedAt',
-              'updatedAt'
-            ])
           )
         );
 
@@ -289,21 +277,52 @@ service cloud.firestore {
     }
 
     match /listing_views/{viewId} {
-      allow create, update: if signedIn()
+      function validListingView(data) {
+        return data.keys().hasOnly([
+          'listingId',
+          'listingType',
+          'listingOwnerId',
+          'viewerId',
+          'viewerEmail',
+          'lastViewedAt',
+          'chatStartedAt',
+          'lastChatStartedAt',
+          'createdAt'
+        ])
+        && data.listingId is string
+        && data.listingType in ['housing', 'market']
+        && data.listingOwnerId is string
+        && data.viewerId == request.auth.uid
+        && data.listingOwnerId != request.auth.uid
+        && viewId == data.listingType + '_' + data.listingId + '_' + request.auth.uid
+        && (!('viewerEmail' in data) || data.viewerEmail is string)
+        && (!('lastViewedAt' in data) || data.lastViewedAt is timestamp)
+        && (!('chatStartedAt' in data) || data.chatStartedAt is timestamp)
+        && (!('lastChatStartedAt' in data) || data.lastChatStartedAt is timestamp)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
         && (
           (
-            incoming().viewerId == request.auth.uid
-            && incoming().listingOwnerId != request.auth.uid
-            && incoming().listingId is string
-            && incoming().listingType in ['housing', 'market']
+            data.listingType == 'housing'
+            && exists(/databases/$(database)/documents/housing_listings/$(data.listingId))
+            && get(/databases/$(database)/documents/housing_listings/$(data.listingId)).data.postedBy == data.listingOwnerId
           )
           ||
           (
-            incoming().userId == request.auth.uid
+            data.listingType == 'market'
+            && exists(/databases/$(database)/documents/marketplace_listings/$(data.listingId))
+            && get(/databases/$(database)/documents/marketplace_listings/$(data.listingId)).data.postedBy == data.listingOwnerId
           )
         );
+      }
 
-      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && validListingView(incoming());
+
+      allow read: if signedIn()
+        && (
+          existing().viewerId == request.auth.uid
+          || existing().listingOwnerId == request.auth.uid
+        );
       allow delete: if false;
     }
 

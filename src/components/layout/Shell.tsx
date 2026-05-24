@@ -42,7 +42,11 @@ import {
   isListingExpired,
   isPublicListingVisible,
 } from "../../utils/listingLifecycle";
-import { trackListingView } from "../../services/listingViewsService";
+import {
+  OwnerListingStats,
+  subscribeToOwnerListingStats,
+  trackListingView,
+} from "../../services/listingViewsService";
 
 import ListingForm from "../features/ListingForm";
 import VerificationModal from "../features/VerificationModal";
@@ -735,6 +739,7 @@ function ListingCard({
   onOpenDetails,
   onRequireProfileReady,
   showOwnerStats,
+  ownerStats,
   onRenew,
   onRequireAuth,
 }: {
@@ -744,6 +749,7 @@ function ListingCard({
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
   showOwnerStats?: boolean;
+  ownerStats?: OwnerListingStats[string];
   onRenew?: (listing: HousingListing | MarketListing, type: ListingType) => void | Promise<void>;
   onRequireAuth?: (intent: PendingIntent) => boolean;
 }) {
@@ -760,6 +766,7 @@ function ListingCard({
   const expired = listing.status === "expired" || isListingExpired((listing as any).expiresAt);
   const deleted = listing.status === "deleted";
   const expiryLabel = getListingExpiryLabel((listing as any).expiresAt);
+  const liveStats = showOwnerStats && isOwner ? ownerStats : undefined;
 
   useEffect(() => {
     let active = true;
@@ -985,14 +992,14 @@ Rooms, items and more - built around the KJU student community`;
             <div className="flex items-center justify-center gap-2 rounded-[22px] border border-white/5 bg-white/[0.035] px-4 py-4 text-white/65">
               <Eye size={15} className="text-kjc-accent" />
               <span className="text-[10px] font-black uppercase tracking-[0.18em]">
-                {Number((listing as any).uniqueViewersCount || 0)} views
+                {liveStats?.viewsCount ?? 0} views
               </span>
             </div>
 
             <div className="flex items-center justify-center gap-2 rounded-[22px] border border-white/5 bg-white/[0.035] px-4 py-4 text-white/65">
               <MessageSquare size={15} className="text-kjc-accent" />
               <span className="text-[10px] font-black uppercase tracking-[0.18em]">
-                {Number((listing as any).chatStartedCount || 0)} chats
+                {liveStats?.chatStartedCount ?? 0} chats
               </span>
             </div>
           </div>
@@ -1210,6 +1217,7 @@ function MyPostsPage({
   housing,
   market,
   loading,
+  listingStatsById,
   onContact,
   onOpenDetails,
   onRequireProfileReady,
@@ -1219,6 +1227,7 @@ function MyPostsPage({
   housing: HousingListing[];
   market: MarketListing[];
   loading: boolean;
+  listingStatsById: OwnerListingStats;
   onContact: (ownerId: string, listingId: string, title: string, type: string) => void | Promise<void>;
   onOpenDetails: (listing: HousingListing | MarketListing, type: ListingType) => void;
   onRequireProfileReady: (intent: PendingIntent) => void | Promise<void>;
@@ -1256,6 +1265,7 @@ function MyPostsPage({
               onRequireProfileReady={onRequireProfileReady}
               onRequireAuth={onRequireAuth}
               showOwnerStats
+              ownerStats={listingStatsById[listing.id]}
               onRenew={onRenew}
             />
           ))}
@@ -1270,6 +1280,7 @@ function MyPostsPage({
               onRequireProfileReady={onRequireProfileReady}
               onRequireAuth={onRequireAuth}
               showOwnerStats
+              ownerStats={listingStatsById[listing.id]}
               onRenew={onRenew}
             />
           ))}
@@ -2129,6 +2140,7 @@ useEffect(() => {
   const [marketData, setMarketData] = useState<MarketListing[]>([]);
   const [myHousingData, setMyHousingData] = useState<HousingListing[]>([]);
   const [myMarketData, setMyMarketData] = useState<MarketListing[]>([]);
+  const [listingStatsById, setListingStatsById] = useState<OwnerListingStats>({});
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [reportListing, setReportListing] = useState<HousingListing | MarketListing | null>(null);
   const [reportListingType, setReportListingType] = useState<ListingType>("housing");
@@ -2257,6 +2269,15 @@ useEffect(() => {
     });
 
     return unsubscribe;
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setListingStatsById({});
+      return;
+    }
+
+    return subscribeToOwnerListingStats(user.uid, setListingStatsById);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -3012,6 +3033,7 @@ setMyMarketData(
                     housing={myHousingData}
                     market={myMarketData}
                     loading={loading}
+                    listingStatsById={listingStatsById}
                     onContact={handleContact}
                     onOpenDetails={openListingDetails}
                     onRequireProfileReady={requireProfileReady}

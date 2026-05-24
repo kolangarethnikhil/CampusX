@@ -188,11 +188,6 @@ export async function startConversation(
     const normalizedListingType: ListingType =
       listingType === "housing" ? "housing" : "market";
 
-    await trackChatStarted({
-      listingId: trimmedListingId,
-      listingType: normalizedListingType,
-      listingOwnerId: trimmedOwnerId,
-    });
     const listingPhoto =
       nullableString(metadata?.listingSnapshot?.photo) ??
       nullableString(metadata?.listingPhoto);
@@ -252,6 +247,12 @@ export async function startConversation(
 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+    });
+
+    await trackChatStarted({
+      listingId: trimmedListingId,
+      listingType: normalizedListingType,
+      listingOwnerId: trimmedOwnerId,
     });
 
     return conversationRef.id;
