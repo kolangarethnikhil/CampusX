@@ -1,0 +1,623 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function validString(value, max) {
+      return value is string && value.size() > 0 && value.size() <= max;
+    }
+
+    function optionalString(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isActiveSpaceMember(spaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function isSpaceModeratorOrAdmin(spaceId) {
+      return isAdmin()
+        || (
+          isActiveSpaceMember(spaceId)
+          && get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.role in ['moderator', 'admin']
+        );
+    }
+
+    function listingCountersUnchanged() {
+      return !incoming().diff(existing()).affectedKeys().hasAny([
+        'viewsCount',
+        'uniqueViewersCount',
+        'chatStartedCount',
+        'lastViewedAt',
+        'lastChatStartedAt'
+      ]);
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      function isKjcAuthEmail() {
+        return request.auth.token.email is string
+          && (
+            request.auth.token.email.lower().matches('.*@kristujayanti\\.com$') ||
+            request.auth.token.email.lower().matches('.*@kjc\\.edu\\.in$')
+          );
+      }
+
+      function validCampusRole() {
+        return incoming().campusRole in [
+          'Student',
+          'Alumni',
+          'Campus Community',
+          'Landlord',
+          'Seller'
+        ];
+      }
+
+      function validVerifiedStatus() {
+        return incoming().verifiedStatus in [
+          'unverified',
+          'pending',
+          'verified'
+        ];
+      }
+
+      function validOptionalProfileFields() {
+  return
+    (!('gender' in incoming()) ||
+      incoming().gender in ['male', 'female', 'prefer_not_to_say'])
+    &&
+    (!('discoverySource' in incoming()) ||
+      incoming().discoverySource in ['instagram', 'friends', 'whatsapp', 'college', 'other'])
+    &&
+    (!('communityIntent' in incoming()) ||
+      incoming().communityIntent in ['explore', 'utility', 'business', 'other'])
+    &&
+    (!('notificationsEnabled' in incoming()) ||
+      incoming().notificationsEnabled is bool)
+    &&
+    (!('marketingOptIn' in incoming()) ||
+      incoming().marketingOptIn is bool)
+    &&
+    (!('emailNotifications' in incoming()) ||
+      incoming().emailNotifications is bool)
+    &&
+    (!('fcmToken' in incoming()) ||
+      incoming().fcmToken is string)
+    &&
+    (!('pushPermission' in incoming()) ||
+      incoming().pushPermission in ['default', 'denied', 'granted', 'unsupported']);
+}
+
+      allow create: if isOwner(userId)
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && validCampusRole()
+        && validVerifiedStatus()
+        && validOptionalProfileFields()
+        && (
+          (
+            isKjcAuthEmail()
+            && incoming().campusRole == 'Student'
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
+        );
+
+      allow update: if isOwner(userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && validCampusRole()
+        && validVerifiedStatus()
+        && validOptionalProfileFields()
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'photoURL',
+          'bio',
+          'course',
+          'batch',
+          'collegeEmail',
+          'campusRole',
+          'verifiedStatus',
+          'passedOutYear',
+          'currentLocation',
+          'hometown',
+          'gender',
+          'discoverySource',
+          'communityIntent',
+          'profileCompleted',
+          'notificationsEnabled',
+          'marketingOptIn',
+          'emailNotifications',
+          'pushSubscription',
+          'fcmToken',
+          'fcmTokenUpdatedAt',
+          'pushPermission',
+          'updatedAt'
+        ])
+        && (
+          (
+            isKjcAuthEmail()
+            && incoming().verifiedStatus == 'verified'
+            && incoming().collegeEmail == request.auth.token.email
+          )
+          ||
+          (
+            !isKjcAuthEmail()
+            && incoming().verifiedStatus in ['unverified', 'pending']
+          )
+        );
+
+      allow delete: if false;
+
+      match /push_tokens/{tokenId} {
+  allow get, list: if isOwner(userId);
+
+  allow create, update: if isOwner(userId)
+    && incoming().token is string;
+
+  allow delete: if isOwner(userId);
+}
+    }
+
+    match /housing_listings/{listingId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && incoming().postedBy == request.auth.uid
+        && validHousingListing(incoming());
+
+      allow update: if signedIn()
+        && (
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && listingCountersUnchanged()
+            && validHousingListing(incoming())
+          )
+        );
+
+      allow delete: if false;
+
+      function validHousingListing(data) {
+        return data.keys().hasAll([
+          'title',
+          'description',
+          'roomType',
+          'rent',
+          'deposit',
+          'postedBy',
+          'status',
+          'latitude',
+          'longitude',
+          'formattedAddress',
+          'availableFrom'
+        ])
+        && validString(data.title, 100)
+        && validString(data.description, 2000)
+        && data.roomType in ['roommate', '1RK', '1BHK', '2BHK', '3BHK', 'PG']
+        && data.rent is number
+        && data.rent > 0
+        && data.deposit is number
+        && data.deposit >= 0
+        && (!('maintenance' in data) || (data.maintenance is number && data.maintenance >= 0))
+        && optionalString(data.restrictions, 1000)
+        && data.preferTenants in ['girls_only', 'boys_only', 'both', 'couples']
+        && data.furnishing in ['Unfurnished', 'Semi-furnished', 'Fully-furnished']
+        && validString(data.availableFrom, 40)
+        && data.latitude is number
+        && data.longitude is number
+        && validString(data.formattedAddress, 500)
+        && data.postedBy == request.auth.uid
+        && data.status in ['available', 'reserved', 'closed', 'expired', 'deleted']
+        && (!('durationDays' in data) || data.durationDays in [15, 30])
+        && (!('viewsCount' in data) || data.viewsCount is number)
+        && (!('uniqueViewersCount' in data) || data.uniqueViewersCount is number)
+        && (!('chatStartedCount' in data) || data.chatStartedCount is number)
+        && (!('photosRetained' in data) || data.photosRetained is bool);
+      }
+    }
+
+    match /marketplace_listings/{listingId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && incoming().postedBy == request.auth.uid
+        && validMarketplaceListing(incoming());
+
+      allow update: if signedIn()
+        && (
+          (
+            isOwner(existing().postedBy)
+            && incoming().postedBy == existing().postedBy
+            && listingCountersUnchanged()
+            && validMarketplaceListing(incoming())
+          )
+        );
+
+      allow delete: if false;
+
+      function validMarketplaceListing(data) {
+        return data.keys().hasAll([
+          'title',
+          'description',
+          'category',
+          'price',
+          'postedBy',
+          'status',
+          'latitude',
+          'longitude',
+          'formattedAddress'
+        ])
+        && validString(data.title, 100)
+        && validString(data.description, 2000)
+        && data.category in ['Furniture', 'Electronics', 'Books', 'Essentials', 'Other']
+        && data.price is number
+        && data.price > 0
+        && data.latitude is number
+        && data.longitude is number
+        && validString(data.formattedAddress, 500)
+        && data.postedBy == request.auth.uid
+        && data.status in ['available', 'reserved', 'sold', 'closed', 'expired', 'deleted']
+        && (!('durationDays' in data) || data.durationDays in [15, 30])
+        && (!('viewsCount' in data) || data.viewsCount is number)
+        && (!('uniqueViewersCount' in data) || data.uniqueViewersCount is number)
+        && (!('chatStartedCount' in data) || data.chatStartedCount is number)
+        && (!('photosRetained' in data) || data.photosRetained is bool);
+      }
+    }
+
+    match /listing_views/{viewId} {
+      function validListingView(data) {
+        return data.keys().hasOnly([
+          'listingId',
+          'listingType',
+          'listingOwnerId',
+          'viewerId',
+          'viewerEmail',
+          'lastViewedAt',
+          'chatStartedAt',
+          'lastChatStartedAt',
+          'createdAt'
+        ])
+        && data.listingId is string
+        && data.listingType in ['housing', 'market']
+        && data.listingOwnerId is string
+        && data.viewerId == request.auth.uid
+        && data.listingOwnerId != request.auth.uid
+        && viewId == data.listingType + '_' + data.listingId + '_' + request.auth.uid
+        && (!('viewerEmail' in data) || data.viewerEmail is string)
+        && (!('lastViewedAt' in data) || data.lastViewedAt is timestamp)
+        && (!('chatStartedAt' in data) || data.chatStartedAt is timestamp)
+        && (!('lastChatStartedAt' in data) || data.lastChatStartedAt is timestamp)
+        && (!('createdAt' in data) || data.createdAt is timestamp)
+        && (
+          (
+            data.listingType == 'housing'
+            && exists(/databases/$(database)/documents/housing_listings/$(data.listingId))
+            && get(/databases/$(database)/documents/housing_listings/$(data.listingId)).data.postedBy == data.listingOwnerId
+          )
+          ||
+          (
+            data.listingType == 'market'
+            && exists(/databases/$(database)/documents/marketplace_listings/$(data.listingId))
+            && get(/databases/$(database)/documents/marketplace_listings/$(data.listingId)).data.postedBy == data.listingOwnerId
+          )
+        );
+      }
+
+      allow create, update: if signedIn()
+        && validListingView(incoming());
+
+      allow read: if signedIn()
+        && (
+          existing().viewerId == request.auth.uid
+          || existing().listingOwnerId == request.auth.uid
+        );
+      allow delete: if false;
+    }
+
+    match /saved_listings/{savedId} {
+      allow read: if signedIn()
+        && resource.data.userId == request.auth.uid;
+
+      allow create: if signedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().listingId is string
+        && incoming().listingType in ['housing', 'market'];
+
+      allow delete: if signedIn()
+        && resource.data.userId == request.auth.uid;
+
+      allow update: if false;
+    }
+
+    match /conversations/{conversationId} {
+  allow get, list: if signedIn()
+    && request.auth.uid in resource.data.participants;
+
+  allow create: if signedIn()
+    && incoming().participants is list
+    && incoming().participants.hasAny([request.auth.uid])
+    && incoming().participants.size() >= 2
+    && incoming().participants.size() <= 10;
+
+  allow update: if signedIn()
+    && request.auth.uid in resource.data.participants
+    && incoming().participants == existing().participants
+    && incoming().listingId == existing().listingId
+    && incoming().listingTitle == existing().listingTitle
+    && incoming().listingType == existing().listingType
+    && (!('listingSnapshot' in existing()) || incoming().listingSnapshot == existing().listingSnapshot)
+    && (!('listingPhoto' in existing()) || incoming().listingPhoto == existing().listingPhoto)
+    && (!('listingPrice' in existing()) || incoming().listingPrice == existing().listingPrice)
+    && (!('listingStatus' in existing()) || incoming().listingStatus == existing().listingStatus)
+    && (!('listingLocation' in existing()) || incoming().listingLocation == existing().listingLocation)
+    && incoming().createdAt == existing().createdAt
+    && incoming().diff(existing()).affectedKeys().hasOnly([
+      'lastMessage',
+      'lastMessageSenderId',
+      'lastMessageAt',
+      'unreadBy',
+      'lastDeliveredAtBy',
+      'lastReadAtBy',
+      'updatedAt'
+    ]);
+
+  allow delete: if false;
+
+  match /messages/{messageId} {
+    allow read: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants;
+
+    allow create: if signedIn()
+      && incoming().senderId == request.auth.uid
+      && validString(incoming().content, 1000)
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants;
+
+    allow update: if signedIn()
+      && request.auth.uid in get(
+        /databases/$(database)/documents/conversations/$(conversationId)
+      ).data.participants
+      && incoming().diff(existing()).affectedKeys().hasOnly([
+        'status',
+        'deliveredAt',
+        'seenAt',
+        'readBy'
+      ]);
+
+    allow delete: if false;
+  }
+}
+
+
+    match /spaces/{spaceId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
+      allow create, update, delete: if isAdmin();
+
+      match /members/{userId} {
+        allow read: if isAdmin() || isActiveSpaceMember(spaceId);
+
+        allow create: if isOwner(userId)
+          && incoming().spaceId == spaceId
+          && incoming().userId == request.auth.uid
+          && incoming().campusId == get(/databases/$(database)/documents/spaces/$(spaceId)).data.campusId
+          && incoming().role == 'member'
+          && incoming().status == 'active'
+          && incoming().keys().hasOnly([
+            'spaceId',
+            'userId',
+            'campusId',
+            'role',
+            'status',
+            'displayName',
+            'photoURL',
+            'joinedAt',
+            'updatedAt',
+            'lastReadAt'
+          ]);
+
+        allow update: if isAdmin()
+          || (
+            isOwner(userId)
+            && existing().userId == request.auth.uid
+            && incoming().spaceId == existing().spaceId
+            && incoming().userId == existing().userId
+            && incoming().campusId == existing().campusId
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status',
+              'lastReadAt',
+              'updatedAt'
+            ])
+            && incoming().status in ['active', 'left']
+          );
+
+        allow delete: if isAdmin();
+      }
+
+      match /messages/{messageId} {
+        allow read: if isAdmin() || isActiveSpaceMember(spaceId);
+
+        allow create: if isActiveSpaceMember(spaceId)
+          && incoming().spaceId == spaceId
+          && incoming().senderId == request.auth.uid
+          && validString(incoming().text, 1000)
+          && incoming().status == 'active'
+          && (!('attachments' in incoming()) || incoming().attachments is list)
+          && incoming().keys().hasOnly([
+            'spaceId',
+            'campusId',
+            'senderId',
+            'senderName',
+            'senderRole',
+            'text',
+            'attachments',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ]);
+
+        allow update: if isSpaceModeratorOrAdmin(spaceId)
+          && incoming().spaceId == existing().spaceId
+          && incoming().senderId == existing().senderId
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status',
+            'deletedBy',
+            'deletedAt',
+            'updatedAt'
+          ])
+          && incoming().status in ['active', 'deleted', 'flagged'];
+
+        allow delete: if false;
+      }
+    }
+
+    match /space_requests/{requestId} {
+      allow create: if signedIn()
+        && incoming().requestedBy == request.auth.uid
+        && validString(incoming().name, 80)
+        && validString(incoming().description, 500)
+        && incoming().category in ['dev', 'sports', 'study', 'social', 'music', 'housing', 'marketplace', 'general']
+        && validString(incoming().reason, 1000)
+        && incoming().status == 'pending'
+        && incoming().keys().hasOnly([
+          'campusId',
+          'requestedBy',
+          'requestedByName',
+          'name',
+          'description',
+          'category',
+          'reason',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow read: if isAdmin() || (signedIn() && resource.data.requestedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /moderator_requests/{requestId} {
+      allow create: if signedIn()
+        && incoming().requestedBy == request.auth.uid
+        && incoming().spaceId is string
+        && exists(/databases/$(database)/documents/spaces/$(incoming().spaceId))
+        && validString(incoming().reason, 1000)
+        && incoming().status == 'pending'
+        && incoming().keys().hasOnly([
+          'campusId',
+          'spaceId',
+          'requestedBy',
+          'requestedByName',
+          'reason',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow read: if isAdmin() || (signedIn() && resource.data.requestedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /listing_reports/{reportId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid
+        && incoming().listingOwnerId != request.auth.uid
+        && incoming().listingId is string
+        && incoming().listingType in ['housing', 'market']
+        && incoming().listingTitle is string
+        && incoming().listingOwnerId is string
+        && incoming().reason in [
+          'fake_listing',
+          'scam',
+          'wrong_location',
+          'already_unavailable',
+          'spam',
+          'unsafe',
+          'other'
+        ]
+        && incoming().status == 'open';
+
+      allow read, update, delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid;
+
+      allow read, update, delete: if false;
+    }
+
+    match /user_blocks/{blockId} {
+      allow create: if signedIn()
+        && incoming().blockerId == request.auth.uid
+        && incoming().blockedUserId is string
+        && incoming().blockedUserId != request.auth.uid;
+
+      allow get, list: if signedIn()
+        && resource.data.blockerId == request.auth.uid;
+
+      allow delete: if signedIn()
+        && resource.data.blockerId == request.auth.uid;
+
+      allow update: if false;
+    }
+
+    match /app_issues/{issueId} {
+      allow create: if signedIn()
+        && incoming().reporterId == request.auth.uid
+        && incoming().type in ['login', 'posting', 'chat', 'map_location', 'profile', 'safety', 'other']
+        && validString(incoming().message, 2000)
+        && incoming().status == 'open';
+
+      allow read, update, delete: if false;
+    }
+
+    match /app_feedback/{feedbackId} {
+      allow create: if signedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().rating is number
+        && incoming().rating >= 1
+        && incoming().rating <= 5
+        && optionalString(incoming().message, 2000);
+
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

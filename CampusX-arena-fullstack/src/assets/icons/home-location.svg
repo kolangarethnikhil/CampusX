@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="HomeLocation" enable-background="new 0 0 512 512" viewBox="0 0 512 512">
+  <ellipse cx="256.96" cy="459.71" fill="#ffffff" rx="175.54" ry="49.79" class="colorffffff svgShape"></ellipse>
+  <linearGradient id="SVGID_1_" x1="165.699" x2="348.212" y1="550.97" y2="368.457" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#494237" class="stopColor373e49 svgShape"></stop>
+    <stop offset=".598" stop-color="#5e574c" class="stopColor4c535e svgShape"></stop>
+    <stop offset="1" stop-color="#665f54" class="stopColor545b66 svgShape"></stop>
+  </linearGradient>
+  <ellipse cx="256.96" cy="459.71" fill="url(#SVGID_1_)" rx="175.54" ry="49.79"></ellipse>
+  <linearGradient id="SVGID_2_" x1="73.858" x2="432.269" y1="232.286" y2="232.286" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#e89200" class="stopColore84d00 svgShape"></stop>
+    <stop offset=".363" stop-color="#d48e17" class="stopColord43917 svgShape"></stop>
+    <stop offset=".721" stop-color="#c68b27" class="stopColorc62c27 svgShape"></stop>
+    <stop offset="1" stop-color="#c18827" class="stopColorc1272d svgShape"></stop>
+  </linearGradient>
+  <path fill="url(#SVGID_2_)" d="M73.86,179.21c0,141.1,179.21,285.37,179.21,285.37s179.21-136.11,179.21-285.37C432.27,80.23,352.04,0,253.06,0C154.09,0,73.86,80.23,73.86,179.21z"></path>
+  <rect width="33.12" height="42.86" x="296.97" y="86.77" fill="#f59e0b" class="colorff9100 svgShape"></rect>
+  <rect width="47.34" height="10.79" x="289.84" y="79.8" fill="#ffa000" class="colorff6700 svgShape"></rect>
+  <path id="XMLID_230_" fill="#ffa000" d="M245.47,268.18h89.91V154.78l-85.42-60.35l-86.21,59.81v113.55h22.07" class="colorffda00 svgShape"></path>
+  <polygon id="XMLID_227_" fill="#ffa000" points="249.96 66.18 149.91 142.24 163.87 160.71 249.96 95.12 335.9 160.71 350 142.24" class="colorff6700 svgShape"></polygon>
+  <rect width="73.53" height="103.59" x="210.18" y="165.34" fill="#ffffff" class="colorffffff svgShape"></rect>
+  <circle cx="229.23" cy="218.23" r="7.98" fill="#e89200" class="colore84d00 svgShape"></circle>
+</svg>
