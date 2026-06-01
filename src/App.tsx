@@ -9,27 +9,13 @@ import ProfileScreen from "./screens/ProfileScreen";
 import BoardListingsScreen from "./screens/BoardListingsScreen";
 import ListingDetailScreen from "./screens/ListingDetailScreen";
 import { subscribeToSpaces } from "./services/spaceService";
-import { subscribeToHousingListings, subscribeToMarketListings } from "./services/listingService";
+import {
+  subscribeToHousingListings,
+  subscribeToMarketListings,
+} from "./services/listingService";
 import type { CampusSpace } from "./types/space";
 import type { UiListing } from "./types/listing";
-
-const fallbackSpaces: CampusSpace[] = [
-  { id: "dev-club", campusId: "kju", name: "Dev Club", description: "Projects & internships", category: "dev", icon: "technologist", accent: "#8b5cf6", createdBy: "system", isOfficial: true, status: "active", memberCount: 38, activeCount: 14 },
-  { id: "sports-club", campusId: "kju", name: "Sports Club", description: "Games & events", category: "sports", icon: "football", accent: "#06b6d4", createdBy: "system", isOfficial: true, status: "active", memberCount: 42, activeCount: 8 },
-  { id: "party-tonight", campusId: "kju", name: "Party Tonight", description: "Hangouts & parties", category: "social", icon: "networking", accent: "#ec4899", createdBy: "system", isOfficial: true, status: "active", memberCount: 23, activeCount: 5 },
-  { id: "study-group", campusId: "kju", name: "Study Group", description: "Notes & exam prep", category: "study", icon: "books", accent: "#14b8a6", createdBy: "system", isOfficial: true, status: "active", memberCount: 32, activeCount: 15 },
-  { id: "music-lovers", campusId: "kju", name: "Music Lovers", description: "Playlists & jams", category: "music", icon: "networking", accent: "#f59e0b", createdBy: "system", isOfficial: true, status: "active", memberCount: 25, activeCount: 6 },
-];
-
-const fallbackHousing: UiListing[] = [
-  { id: "demo-housing-1", sourceType: "housing", title: "1BHK near Hanuman Arch", price: "₹12,500", priceUnit: "/ MONTH", location: "Kothanur", distance: "773 M FROM KJU", tag: "1BHK", tags: ["UNFURNISHED", "BOYS ONLY"], author: "Rahul", timeAgo: "2m ago", description: "Spacious 1BHK with balcony. Water & power backup included.", saved: true },
-  { id: "demo-housing-2", sourceType: "housing", title: "2BHK near Falcon", price: "₹18,000", priceUnit: "/ MONTH", location: "Lingarajapura", distance: "6.0 KM FROM KJU", tag: "2BHK", tags: ["UNFURNISHED", "AVAILABLE"], author: "Amit", timeAgo: "1h ago", description: "2BHK flat, ground floor. Near bus stop." },
-];
-
-const fallbackMarket: UiListing[] = [
-  { id: "demo-market-1", sourceType: "market", title: "Study table + chair combo", price: "₹1,800", priceUnit: "", location: "Near back gate", distance: "NEAR KJU", tag: "FURNITURE", tags: ["GOOD", "NEGOTIABLE"], author: "Ananya", timeAgo: "8m ago", description: "Clean study table and chair. Pickup near campus." },
-  { id: "demo-market-2", sourceType: "market", title: "Engineering books bundle", price: "₹900", priceUnit: "", location: "Kothanur", distance: "NEAR KJU", tag: "BOOKS", tags: ["GOOD", "BUNDLE"], author: "Nikhil", timeAgo: "1h ago", description: "Useful books for juniors. Selling as bundle." },
-];
+import { useAuth } from "./contexts/AuthContext";
 
 type SubScreen =
   | { type: "room"; space: CampusSpace }
@@ -40,22 +26,49 @@ type SubScreen =
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
-  const [spaces, setSpaces] = useState<CampusSpace[]>(fallbackSpaces);
-  const [housingListings, setHousingListings] = useState<UiListing[]>(fallbackHousing);
-  const [marketListings, setMarketListings] = useState<UiListing[]>(fallbackMarket);
+
+  const [spaces, setSpaces] = useState<CampusSpace[]>([]);
+  const [housingListings, setHousingListings] = useState<UiListing[]>([]);
+  const [marketListings, setMarketListings] = useState<UiListing[]>([]);
+
+  const [spacesLoading, setSpacesLoading] = useState(true);
+  const [listingsLoading, setListingsLoading] = useState(true);
+
+  const { user } = useAuth();
 
   useEffect(() => {
     const unsubscribers: Array<() => void> = [];
 
     try {
-      unsubscribers.push(subscribeToSpaces((items) => setSpaces(items.length ? items : fallbackSpaces)));
-      unsubscribers.push(subscribeToHousingListings((items) => setHousingListings(items.length ? items : fallbackHousing)));
-      unsubscribers.push(subscribeToMarketListings((items) => setMarketListings(items.length ? items : fallbackMarket)));
+      unsubscribers.push(
+        subscribeToSpaces((items) => {
+          setSpaces(items);
+          setSpacesLoading(false);
+        })
+      );
+
+      unsubscribers.push(
+        subscribeToHousingListings((items) => {
+          setHousingListings(items);
+          setListingsLoading(false);
+        })
+      );
+
+      unsubscribers.push(
+        subscribeToMarketListings((items) => {
+          setMarketListings(items);
+          setListingsLoading(false);
+        })
+      );
     } catch (error) {
       console.error("Realtime subscription setup failed:", error);
+      setSpacesLoading(false);
+      setListingsLoading(false);
     }
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, []);
 
   const spacesByName = useMemo(
@@ -64,21 +77,37 @@ export default function App() {
   );
 
   const handleOpenSpace = (spaceName: string) => {
-    const space = spacesByName.get(spaceName) || fallbackSpaces.find((item) => item.name === spaceName) || fallbackSpaces[0];
-    setSubScreen({ type: "room", space });
+    const space = spacesByName.get(spaceName);
+
+    if (!space) return;
+
+    setSubScreen({
+      type: "room",
+      space,
+    });
   };
 
   const handleOpenBoard = (boardName: string) => {
-    setSubScreen({ type: "boardListings", boardName });
+    setSubScreen({
+      type: "boardListings",
+      boardName,
+    });
   };
 
   const handleOpenListing = (listing: UiListing, boardName: string) => {
-    setSubScreen({ type: "listingDetail", listing, boardName });
+    setSubScreen({
+      type: "listingDetail",
+      listing,
+      boardName,
+    });
   };
 
   const handleBack = () => {
     if (subScreen?.type === "listingDetail") {
-      setSubScreen({ type: "boardListings", boardName: subScreen.boardName });
+      setSubScreen({
+        type: "boardListings",
+        boardName: subScreen.boardName,
+      });
     } else {
       setSubScreen(null);
     }
@@ -91,10 +120,19 @@ export default function App() {
 
   const getBoardListings = (boardName: string) => {
     if (boardName === "Housing") return housingListings;
-    if (boardName === "Part-time") return fallbackMarket.filter((item) => item.tag.includes("PART") || item.title.toLowerCase().includes("content"));
-    if (boardName === "Internships") return fallbackMarket.filter((item) => item.title.toLowerCase().includes("intern"));
-    if (["Dev Club", "Sports", "Social"].includes(boardName)) return [];
-    return marketListings;
+    if (boardName === "Essentials") return marketListings;
+
+    return [];
+  };
+
+  const boardCounts = {
+    Housing: housingListings.length,
+    Essentials: marketListings.length,
+    Internships: 0,
+    "Part-time": 0,
+    "Dev Club": spaces.find((space) => space.name === "Dev Club")?.memberCount || 0,
+    Sports: spaces.find((space) => space.name === "Sports Club")?.memberCount || 0,
+    Social: spaces.find((space) => space.name === "Party Tonight")?.memberCount || 0,
   };
 
   const showBottomNav = subScreen === null;
@@ -109,15 +147,38 @@ export default function App() {
         <BoardListingsScreen
           boardName={subScreen.boardName}
           listings={getBoardListings(subScreen.boardName)}
+          loading={listingsLoading}
           onBack={handleBack}
-          onOpenListing={(listing) => handleOpenListing(listing, subScreen.boardName)}
+          onOpenListing={(listing) =>
+            handleOpenListing(listing, subScreen.boardName)
+          }
         />
       ) : (
         <>
-          {activeTab === "home" && <HomeScreen onOpenSpace={handleOpenSpace} />}
-          {activeTab === "boards" && <BoardsScreen onOpenBoard={handleOpenBoard} />}
-          {activeTab === "spaces" && <SpacesScreen spaces={spaces} onOpenSpace={handleOpenSpace} />}
-          {activeTab === "profile" && <ProfileScreen listings={[...housingListings, ...marketListings]} />}
+          {activeTab === "home" && (
+            <HomeScreen
+              user={user}
+              spaces={spaces}
+              spacesLoading={spacesLoading}
+              housingCount={housingListings.length}
+              dealsCount={marketListings.length}
+              onOpenSpace={handleOpenSpace}
+              onOpenBoard={handleOpenBoard}
+              onOpenSpaces={() => setActiveTab("spaces")}
+            />
+          )}
+
+          {activeTab === "boards" && (
+            <BoardsScreen counts={boardCounts} onOpenBoard={handleOpenBoard} />
+          )}
+
+          {activeTab === "spaces" && (
+            <SpacesScreen spaces={spaces} onOpenSpace={handleOpenSpace} />
+          )}
+
+          {activeTab === "profile" && (
+            <ProfileScreen listings={[...housingListings, ...marketListings]} />
+          )}
         </>
       )}
 
