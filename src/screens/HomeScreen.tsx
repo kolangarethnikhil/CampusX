@@ -42,6 +42,7 @@ interface HomeScreenProps {
   onOpenSpace: (spaceName: string) => void;
   onOpenBoard: (boardName: string) => void;
   onOpenSpaces: () => void;
+  onCreateListing: (type: "housing" | "market") => void;
 }
 
 function iconForSpace(space: CampusSpace): AppIconName {
@@ -57,7 +58,8 @@ export default function HomeScreen({
   dealsCount,
   onOpenSpace,
   onOpenBoard,
-  onOpenSpaces,
+ onOpenSpaces,
+onCreateListing,
 }: HomeScreenProps) {
   const displayName = user?.displayName?.split(" ")[0] || "CampusX";
 
@@ -70,8 +72,8 @@ export default function HomeScreen({
 
   const handleQuickAction = (action: "housing" | "essentials" | "spaces") => {
     if (action === "housing") onOpenBoard("Housing");
-    if (action === "essentials") onOpenBoard("Essentials");
-    if (action === "spaces") onOpenSpaces();
+if (action === "essentials") onCreateListing("market");
+if (action === "spaces") onOpenSpaces();
   };
 
   return (

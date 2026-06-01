@@ -8,6 +8,7 @@ import RoomChatScreen from "./screens/RoomChatScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import BoardListingsScreen from "./screens/BoardListingsScreen";
 import ListingDetailScreen from "./screens/ListingDetailScreen";
+import CreateListingSheet from "./screens/CreateListingSheet";
 import { subscribeToSpaces } from "./services/spaceService";
 import {
   subscribeToHousingListings,
@@ -26,6 +27,7 @@ type SubScreen =
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
+  const [createOpen, setCreateOpen] = useState<false | "housing" | "market">(false);
 
   const [spaces, setSpaces] = useState<CampusSpace[]>([]);
   const [housingListings, setHousingListings] = useState<UiListing[]>([]);
@@ -135,7 +137,7 @@ export default function App() {
     Social: spaces.find((space) => space.name === "Party Tonight")?.memberCount || 0,
   };
 
-  const showBottomNav = subScreen === null;
+  const showBottomNav = subScreen === null && !createOpen;
 
   return (
     <PhoneFrame>
@@ -157,15 +159,16 @@ export default function App() {
         <>
           {activeTab === "home" && (
             <HomeScreen
-              user={user}
-              spaces={spaces}
-              spacesLoading={spacesLoading}
-              housingCount={housingListings.length}
-              dealsCount={marketListings.length}
-              onOpenSpace={handleOpenSpace}
-              onOpenBoard={handleOpenBoard}
-              onOpenSpaces={() => setActiveTab("spaces")}
-            />
+  user={user}
+  spaces={spaces}
+  spacesLoading={spacesLoading}
+  housingCount={housingListings.length}
+  dealsCount={marketListings.length}
+  onOpenSpace={handleOpenSpace}
+  onOpenBoard={handleOpenBoard}
+  onOpenSpaces={() => setActiveTab("spaces")}
+  onCreateListing={(type) => setCreateOpen(type)}
+/>
           )}
 
           {activeTab === "boards" && (
@@ -182,7 +185,18 @@ export default function App() {
         </>
       )}
 
-      {showBottomNav && <BottomNav active={activeTab} onNavigate={handleNavigate} />}
+      {createOpen && (
+  <CreateListingSheet
+    initialType={createOpen}
+    onClose={() => setCreateOpen(false)}
+    onCreated={() => {
+      setCreateOpen(false);
+      setActiveTab("boards");
+    }}
+  />
+)}
+
+{showBottomNav && <BottomNav active={activeTab} onNavigate={handleNavigate} />}
     </PhoneFrame>
   );
 }
