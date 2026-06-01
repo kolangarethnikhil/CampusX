@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { GoogleAuthProvider, getAuth, signInWithPopup, signOut } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -13,11 +12,28 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-export const app = initializeApp(firebaseConfig);
+export const hasFirebaseConfig = Boolean(
+  firebaseConfig.projectId && firebaseConfig.appId && firebaseConfig.apiKey
+);
 
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+
+const googleProvider = new GoogleAuthProvider();
+
+googleProvider.setCustomParameters({
+  prompt: "select_account",
+});
+
+export async function signInWithGoogle() {
+  if (!hasFirebaseConfig) throw new Error("Firebase env vars are missing.");
+  return signInWithPopup(auth, googleProvider);
+}
+
+export async function logout() {
+  return signOut(auth);
+}
 
 export enum OperationType {
   CREATE = "create",
@@ -28,24 +44,12 @@ export enum OperationType {
   WRITE = "write",
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-  };
-}
-
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
 ): never {
-  const errInfo: FirestoreErrorInfo = {
+  const errInfo = {
     error: error instanceof Error ? error.message : String(error),
     operationType,
     path,
@@ -60,5 +64,3 @@ export function handleFirestoreError(
   console.error("Firestore Error:", errInfo);
   throw new Error(JSON.stringify(errInfo));
 }
-(window as any).__firebaseApp  = app;
-(window as any).__campusxVapid = import.meta.env.VITE_FIREBASE_VAPID_KEY;

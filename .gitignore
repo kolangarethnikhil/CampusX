@@ -1,9 +1,2 @@
-node_modules
-dist
+node_modules/
 .env
-.env.local
-.env.*.local
-debug-report.txt
-debug-all.ps1
-firebase-applet-config.json
-scripts/firebase-service-account.json

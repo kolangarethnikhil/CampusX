@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" id="briefcase" x="0" y="0" version="1.1" viewBox="0 0 512 512" enable-background="new 0 0 512 512">
+  <g fill="#000000" class="color000000 svgShape">
+    <path d="M368.1,99.1v39.7h-27.4V99.1c0-17-13.8-30.8-30.8-30.8H202.4c-17,0-30.8,13.8-30.8,30.8v39.7h-27.4V99.1
+		c0-32.2,26.1-58.2,58.2-58.2h107.5C342,40.9,368.1,66.9,368.1,99.1z" fill="#8b5cf6" class="color29aae2 svgShape"></path>
+    <path d="M453.3,471.1H58.7c-22.3,0-40.4-18.1-40.4-40.4V154.6c0-10.7,8.7-19.3,19.3-19.3h436.4
+		c10.7,0,19.3,8.7,19.3,19.3v276C493.5,453,475.3,471.1,453.3,471.1z" fill="#8b5cf6" class="color29aae2 svgShape"></path>
+    <path d="M429.6,271.7H82.2c-35.1,0-63.6-28.4-63.6-63.6v-53.3c0-10.7,8.7-19.3,19.3-19.3h436.4
+		c10.7,0,19.3,8.7,19.3,19.3v53.3C493.5,243.3,465,271.7,429.6,271.7z" fill="#420dba" class="color0d71ba svgShape"></path>
+    <g fill="#000000" class="color000000 svgShape">
+      <g fill="#000000" class="color000000 svgShape">
+        <path d="M123.7,243.7H164v57.1c0,11.1-9,20.1-20.1,20.1h0c-11.1,0-20.1-9-20.1-20.1V243.7z" fill="#2c165f" class="color5f3916 svgShape"></path>
+      </g>
+      <rect width="40.3" height="108.2" x="123.7" y="135.5" fill="#2c165f" class="color5f3916 svgShape"></rect>
+      <rect width="40.3" height="40.3" x="123.7" y="220.3" fill="#753afb" class="colorfbb03a svgShape"></rect>
+      <g fill="#000000" class="color000000 svgShape">
+        <path d="M348.3,243.7h40.3v57.1c0,11.1-9,20.1-20.1,20.1h0c-11.1,0-20.1-9-20.1-20.1V243.7z" fill="#2c165f" class="color5f3916 svgShape"></path>
+      </g>
+      <rect width="40.3" height="108.2" x="348.3" y="135.5" fill="#2c165f" class="color5f3916 svgShape"></rect>
+      <rect width="40.3" height="40.3" x="348.3" y="220.3" fill="#753afb" class="colorfbb03a svgShape"></rect>
+    </g>
+  </g>
+</svg>

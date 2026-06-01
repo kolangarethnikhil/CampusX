@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "kju1-a25b4"
+    "default": "kju1-a25b4",
+    "dev": "campusx-dev"
   },
   "targets": {},
   "etags": {}

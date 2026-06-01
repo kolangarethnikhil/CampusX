@@ -26,6 +26,24 @@ service cloud.firestore {
       return value == null || (value is string && value.size() <= max);
     }
 
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isActiveSpaceMember(spaceId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.status == 'active';
+    }
+
+    function isSpaceModeratorOrAdmin(spaceId) {
+      return isAdmin()
+        || (
+          isActiveSpaceMember(spaceId)
+          && get(/databases/$(database)/documents/spaces/$(spaceId)/members/$(request.auth.uid)).data.role in ['moderator', 'admin']
+        );
+    }
+
     function listingCountersUnchanged() {
       return !incoming().diff(existing()).affectedKeys().hasAny([
         'viewsCount',
@@ -402,6 +420,136 @@ service cloud.firestore {
     allow delete: if false;
   }
 }
+
+
+    match /spaces/{spaceId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
+      allow create, update, delete: if isAdmin();
+
+      match /members/{userId} {
+        allow read: if isAdmin() || isActiveSpaceMember(spaceId);
+
+        allow create: if isOwner(userId)
+          && incoming().spaceId == spaceId
+          && incoming().userId == request.auth.uid
+          && incoming().campusId == get(/databases/$(database)/documents/spaces/$(spaceId)).data.campusId
+          && incoming().role == 'member'
+          && incoming().status == 'active'
+          && incoming().keys().hasOnly([
+            'spaceId',
+            'userId',
+            'campusId',
+            'role',
+            'status',
+            'displayName',
+            'photoURL',
+            'joinedAt',
+            'updatedAt',
+            'lastReadAt'
+          ]);
+
+        allow update: if isAdmin()
+          || (
+            isOwner(userId)
+            && existing().userId == request.auth.uid
+            && incoming().spaceId == existing().spaceId
+            && incoming().userId == existing().userId
+            && incoming().campusId == existing().campusId
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status',
+              'lastReadAt',
+              'updatedAt'
+            ])
+            && incoming().status in ['active', 'left']
+          );
+
+        allow delete: if isAdmin();
+      }
+
+      match /messages/{messageId} {
+        allow read: if isAdmin() || isActiveSpaceMember(spaceId);
+
+        allow create: if isActiveSpaceMember(spaceId)
+          && incoming().spaceId == spaceId
+          && incoming().senderId == request.auth.uid
+          && validString(incoming().text, 1000)
+          && incoming().status == 'active'
+          && (!('attachments' in incoming()) || incoming().attachments is list)
+          && incoming().keys().hasOnly([
+            'spaceId',
+            'campusId',
+            'senderId',
+            'senderName',
+            'senderRole',
+            'text',
+            'attachments',
+            'status',
+            'createdAt',
+            'updatedAt'
+          ]);
+
+        allow update: if isSpaceModeratorOrAdmin(spaceId)
+          && incoming().spaceId == existing().spaceId
+          && incoming().senderId == existing().senderId
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'status',
+            'deletedBy',
+            'deletedAt',
+            'updatedAt'
+          ])
+          && incoming().status in ['active', 'deleted', 'flagged'];
+
+        allow delete: if false;
+      }
+    }
+
+    match /space_requests/{requestId} {
+      allow create: if signedIn()
+        && incoming().requestedBy == request.auth.uid
+        && validString(incoming().name, 80)
+        && validString(incoming().description, 500)
+        && incoming().category in ['dev', 'sports', 'study', 'social', 'music', 'housing', 'marketplace', 'general']
+        && validString(incoming().reason, 1000)
+        && incoming().status == 'pending'
+        && incoming().keys().hasOnly([
+          'campusId',
+          'requestedBy',
+          'requestedByName',
+          'name',
+          'description',
+          'category',
+          'reason',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow read: if isAdmin() || (signedIn() && resource.data.requestedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /moderator_requests/{requestId} {
+      allow create: if signedIn()
+        && incoming().requestedBy == request.auth.uid
+        && incoming().spaceId is string
+        && exists(/databases/$(database)/documents/spaces/$(incoming().spaceId))
+        && validString(incoming().reason, 1000)
+        && incoming().status == 'pending'
+        && incoming().keys().hasOnly([
+          'campusId',
+          'spaceId',
+          'requestedBy',
+          'requestedByName',
+          'reason',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow read: if isAdmin() || (signedIn() && resource.data.requestedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
 
     match /listing_reports/{reportId} {
       allow create: if signedIn()
