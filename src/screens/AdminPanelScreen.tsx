@@ -1,0 +1,534 @@
+import {
+  ArrowLeft,
+  Check,
+  EyeOff,
+  Plus,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import AppIcon, { type AppIconName } from "../components/AppIcon";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  approveModeratorRequest,
+  approveSpaceRequest,
+  createAdminSpace,
+  rejectModeratorRequest,
+  rejectSpaceRequest,
+  subscribeAdminModeratorRequests,
+  subscribeAdminSpaceRequests,
+  subscribeAdminSpaces,
+  updateSpaceStatus,
+} from "../services/adminService";
+import type { ModeratorRequest, SpaceRequest } from "../types/moderation";
+import type { CampusSpace, SpaceCategory } from "../types/space";
+
+type AdminTab = "spaces" | "spaceRequests" | "moderators";
+
+const categories: SpaceCategory[] = [
+  "dev",
+  "sports",
+  "study",
+  "social",
+  "music",
+  "housing",
+  "marketplace",
+  "general",
+];
+
+const accents = [
+  "#8b5cf6",
+  "#06b6d4",
+  "#ec4899",
+  "#14b8a6",
+  "#f59e0b",
+  "#22c55e",
+];
+
+const icons: AppIconName[] = [
+  "technologist",
+  "football",
+  "books",
+  "networking",
+  "sofa",
+  "homeRent",
+];
+
+interface AdminPanelScreenProps {
+  onBack: () => void;
+}
+
+export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
+  const [tab, setTab] = useState<AdminTab>("spaces");
+  const [spaces, setSpaces] = useState<CampusSpace[]>([]);
+  const [spaceRequests, setSpaceRequests] = useState<SpaceRequest[]>([]);
+  const [moderatorRequests, setModeratorRequests] = useState<
+    ModeratorRequest[]
+  >([]);
+  const [status, setStatus] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { user, isAdmin, refreshClaims } = useAuth();
+
+  useEffect(() => {
+    void refreshClaims().catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const unsubSpaces = subscribeAdminSpaces(setSpaces);
+    const unsubSpaceRequests = subscribeAdminSpaceRequests(setSpaceRequests);
+    const unsubModeratorRequests =
+      subscribeAdminModeratorRequests(setModeratorRequests);
+
+    return () => {
+      unsubSpaces();
+      unsubSpaceRequests();
+      unsubModeratorRequests();
+    };
+  }, [isAdmin]);
+
+  const run = async (task: () => Promise<unknown>, success: string) => {
+    setStatus("");
+
+    try {
+      await task();
+      setStatus(success);
+    } catch (error) {
+      console.error(error);
+      setStatus(error instanceof Error ? error.message : "Admin action failed.");
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-cx-bg">
+        <div className="relative flex items-center gap-3 pt-14 px-4 pb-4 bg-gradient-radial">
+          <button
+            onClick={onBack}
+            className="w-10 h-10 rounded-full glass interactive-glass flex items-center justify-center"
+          >
+            <ArrowLeft size={18} className="text-cx-text" />
+          </button>
+
+          <div>
+            <h1 className="text-[20px] font-semibold text-cx-text">
+              Admin Panel
+            </h1>
+            <p className="text-[11px] text-cx-text-muted">
+              Admin access required
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center px-6 text-center bg-gradient-mesh">
+          <div className="glass-elevated rounded-[28px] p-6">
+            <ShieldCheck
+              size={28}
+              className="text-cx-purple-bright mx-auto mb-3"
+            />
+
+            <p className="text-[15px] font-semibold text-cx-text">
+              You are not an admin yet
+            </p>
+
+            <p className="text-[11px] text-cx-text-muted mt-2 leading-relaxed">
+              Run the admin claim script for your Firebase UID, then sign out
+              and sign in again.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-cx-bg">
+      <div className="relative pt-14 px-4 pb-4 bg-gradient-radial">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={onBack}
+            className="w-10 h-10 rounded-full glass interactive-glass flex items-center justify-center"
+          >
+            <ArrowLeft size={18} className="text-cx-text" />
+          </button>
+
+          <div className="flex-1">
+            <h1 className="text-[22px] font-semibold text-cx-text tracking-[-0.04em]">
+              Admin Panel
+            </h1>
+            <p className="text-[11px] text-cx-text-muted">
+              Spaces, requests and moderators
+            </p>
+          </div>
+
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="h-10 px-3 rounded-full bg-white text-black text-[10px] font-semibold flex items-center gap-1.5"
+          >
+            <Plus size={13} /> Space
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 rounded-2xl glass p-1">
+          <TabButton
+            active={tab === "spaces"}
+            label="Spaces"
+            count={spaces.length}
+            onClick={() => setTab("spaces")}
+          />
+          <TabButton
+            active={tab === "spaceRequests"}
+            label="Requests"
+            count={spaceRequests.length}
+            onClick={() => setTab("spaceRequests")}
+          />
+          <TabButton
+            active={tab === "moderators"}
+            label="Mods"
+            count={moderatorRequests.length}
+            onClick={() => setTab("moderators")}
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 bg-gradient-mesh">
+        {status && (
+          <p className="mb-3 rounded-2xl bg-white/[0.035] border border-white/[0.06] px-4 py-3 text-[11px] text-cx-text-secondary">
+            {status}
+          </p>
+        )}
+
+        {tab === "spaces" && (
+          <div className="space-y-3">
+            {spaces.length === 0 ? (
+              <EmptyAdminState title="No spaces yet" />
+            ) : (
+              spaces.map((space) => (
+                <div key={space.id} className="glass-elevated rounded-[22px] p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-12 h-12 rounded-2xl glass flex items-center justify-center overflow-hidden"
+                      style={{ background: `${space.accent}12` }}
+                    >
+                      <AppIcon
+                        name={(space.icon || "networking") as AppIconName}
+                        size={38}
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-cx-text truncate">
+                        {space.name}
+                      </p>
+                      <p className="text-[10px] text-cx-text-muted truncate">
+                        {space.status} · {space.memberCount || 0} members
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        run(
+                          () =>
+                            updateSpaceStatus(
+                              space.id,
+                              space.status === "active" ? "hidden" : "active"
+                            ),
+                          "Space status updated."
+                        )
+                      }
+                      className="w-9 h-9 rounded-full glass flex items-center justify-center"
+                    >
+                      <EyeOff size={15} className="text-cx-text-secondary" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "spaceRequests" && (
+          <div className="space-y-3">
+            {spaceRequests.length === 0 ? (
+              <EmptyAdminState title="No pending space requests" />
+            ) : (
+              spaceRequests.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  title={request.name}
+                  subtitle={`${request.category} · ${
+                    request.requestedByName || "CampusX user"
+                  }`}
+                  description={request.reason}
+                  onApprove={() =>
+                    user &&
+                    run(
+                      () => approveSpaceRequest(request, user.uid),
+                      "Space request approved."
+                    )
+                  }
+                  onReject={() =>
+                    user &&
+                    run(
+                      () => rejectSpaceRequest(request.id, user.uid),
+                      "Space request rejected."
+                    )
+                  }
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "moderators" && (
+          <div className="space-y-3">
+            {moderatorRequests.length === 0 ? (
+              <EmptyAdminState title="No pending moderator requests" />
+            ) : (
+              moderatorRequests.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  title="Moderator request"
+                  subtitle={`${request.spaceId} · ${
+                    request.requestedByName || "CampusX user"
+                  }`}
+                  description={request.reason}
+                  onApprove={() =>
+                    user &&
+                    run(
+                      () => approveModeratorRequest(request, user.uid),
+                      "Moderator approved."
+                    )
+                  }
+                  onReject={() =>
+                    user &&
+                    run(
+                      () => rejectModeratorRequest(request.id, user.uid),
+                      "Moderator request rejected."
+                    )
+                  }
+                />
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {createOpen && (
+        <CreateSpaceSheet
+          onClose={() => setCreateOpen(false)}
+          onCreate={(input) =>
+            run(() => createAdminSpace(input), "Space created.").then(() =>
+              setCreateOpen(false)
+            )
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl py-2 text-[10px] font-semibold ${
+        active ? "bg-cx-purple text-white" : "text-cx-text-muted"
+      }`}
+    >
+      {label} <span className="opacity-70">{count}</span>
+    </button>
+  );
+}
+
+function EmptyAdminState({ title }: { title: string }) {
+  return (
+    <div className="rounded-[24px] glass-subtle p-8 text-center text-[12px] text-cx-text-muted">
+      {title}
+    </div>
+  );
+}
+
+function RequestCard({
+  title,
+  subtitle,
+  description,
+  onApprove,
+  onReject,
+}: {
+  title: string;
+  subtitle: string;
+  description: string;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="glass-elevated rounded-[22px] p-4">
+      <p className="text-[14px] font-semibold text-cx-text">{title}</p>
+      <p className="text-[10px] text-cx-text-muted mt-1">{subtitle}</p>
+      <p className="text-[12px] text-cx-text-secondary leading-relaxed mt-3">
+        {description}
+      </p>
+
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        <button
+          onClick={onReject}
+          className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400 flex items-center justify-center gap-1.5"
+        >
+          <X size={13} /> Reject
+        </button>
+
+        <button
+          onClick={onApprove}
+          className="rounded-2xl bg-white py-3 text-[11px] font-semibold text-black flex items-center justify-center gap-1.5"
+        >
+          <Check size={13} /> Approve
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateSpaceSheet({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (input: {
+    name: string;
+    description: string;
+    category: SpaceCategory;
+    icon: string;
+    accent: string;
+  }) => Promise<void> | void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<SpaceCategory>("general");
+  const [icon, setIcon] = useState<AppIconName>("networking");
+  const [accent, setAccent] = useState("#8b5cf6");
+
+  return (
+    <div className="absolute inset-0 z-[100] bg-black/70 flex items-end animate-fade-in">
+      <button className="absolute inset-0" onClick={onClose} />
+
+      <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[86%] overflow-y-auto">
+        <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
+
+        <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
+          Create space
+        </h3>
+
+        <p className="text-[11px] text-cx-text-muted mt-1 mb-5">
+          Admin-created official campus room.
+        </p>
+
+        <div className="space-y-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Space name"
+            className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
+          />
+
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            className="w-full min-h-[90px] input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted resize-none"
+          />
+
+          <div>
+            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+              Category
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              {categories.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setCategory(item)}
+                  className={`rounded-xl px-3 py-2 text-[10px] border ${
+                    category === item
+                      ? "bg-cx-purple text-white border-cx-purple"
+                      : "border-white/[0.06] text-cx-text-muted"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+              Icon
+            </p>
+
+            <div className="grid grid-cols-6 gap-2">
+              {icons.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setIcon(item)}
+                  className={`rounded-xl p-2 border ${
+                    icon === item
+                      ? "border-cx-purple bg-cx-purple/10"
+                      : "border-white/[0.06]"
+                  }`}
+                >
+                  <AppIcon name={item} size={26} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+              Accent
+            </p>
+
+            <div className="grid grid-cols-6 gap-2">
+              {accents.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setAccent(item)}
+                  className={`h-8 rounded-xl border ${
+                    accent === item ? "border-white" : "border-white/[0.08]"
+                  }`}
+                  style={{ background: item }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() =>
+            onCreate({
+              name,
+              description,
+              category,
+              icon,
+              accent,
+            })
+          }
+          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black"
+        >
+          Create official space
+        </button>
+      </div>
+    </div>
+  );
+}

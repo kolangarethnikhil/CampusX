@@ -9,6 +9,7 @@ import ProfileScreen from "./screens/ProfileScreen";
 import BoardListingsScreen from "./screens/BoardListingsScreen";
 import ListingDetailScreen from "./screens/ListingDetailScreen";
 import CreateListingSheet from "./screens/CreateListingSheet";
+import AdminPanelScreen from "./screens/AdminPanelScreen";
 import { subscribeToSpaces } from "./services/spaceService";
 import {
   subscribeToHousingListings,
@@ -24,11 +25,11 @@ type CreateIntent = {
   boardName?: string;
   lockType?: boolean;
 };
-
 type SubScreen =
   | { type: "room"; space: CampusSpace }
   | { type: "boardListings"; boardName: string }
   | { type: "listingDetail"; listing: UiListing; boardName: string }
+  | { type: "admin" }
   | null;
 
 export default function App() {
@@ -165,8 +166,10 @@ export default function App() {
   return (
     <PhoneFrame>
       {subScreen?.type === "room" ? (
-        <RoomChatScreen space={subScreen.space} onBack={handleBack} />
-      ) : subScreen?.type === "listingDetail" ? (
+  <RoomChatScreen space={subScreen.space} onBack={handleBack} />
+) : subScreen?.type === "admin" ? (
+  <AdminPanelScreen onBack={handleBack} />
+) : subScreen?.type === "listingDetail" ? (
         <ListingDetailScreen listing={subScreen.listing} onBack={handleBack} />
       ) : subScreen?.type === "boardListings" ? (
         <BoardListingsScreen
@@ -210,14 +213,15 @@ export default function App() {
 
           {activeTab === "profile" && (
             <ProfileScreen
-              listings={[...housingListings, ...marketListings]}
-              onCreateListing={(type) =>
-                setCreateOpen({
-                  type,
-                  lockType: false,
-                })
-              }
-            />
+  listings={[...housingListings, ...marketListings]}
+  onCreateListing={(type) =>
+    setCreateOpen({
+      type,
+      lockType: false,
+    })
+  }
+  onOpenAdmin={() => setSubScreen({ type: "admin" })}
+/>  
           )}
         </>
       )}

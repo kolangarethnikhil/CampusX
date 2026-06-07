@@ -25,17 +25,19 @@ interface ProfileScreenProps {
   listings?: UiListing[];
   onOpenListing?: (id: string | number) => void;
   onCreateListing?: (type: "housing" | "market") => void;
+  onOpenAdmin?: () => void;
 }
 
 export default function ProfileScreen({
   listings,
   onOpenListing,
   onCreateListing,
+  onOpenAdmin,
 }: ProfileScreenProps) {
   const [activeSection, setActiveSection] = useState<"saved" | "posts">("saved");
   const [panel, setPanel] = useState<string | null>(null);
 
-  const { user, signIn, signOut } = useAuth();
+  const { user, signIn, signOut, isAdmin } = useAuth();
 
   const visibleSavedPosts: SavedPost[] =
     listings?.length
@@ -101,6 +103,29 @@ export default function ProfileScreen({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pt-2 pb-4 bg-gradient-mesh">
+        {isAdmin && (
+  <button
+    onClick={onOpenAdmin}
+    className="w-full mb-3 rounded-2xl border border-cx-purple/20 bg-cx-purple/[0.06] px-4 py-3 flex items-center justify-between hover:bg-cx-purple/[0.1] transition-all"
+  >
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-cx-purple/10 text-cx-purple-bright flex items-center justify-center">
+        <Settings size={16} />
+      </div>
+
+      <div className="text-left">
+        <p className="text-[13px] font-semibold text-cx-text">
+          Admin Panel
+        </p>
+        <p className="text-[10px] text-cx-text-muted">
+          Spaces, requests, moderators
+        </p>
+      </div>
+    </div>
+
+    <ChevronRight size={15} className="text-cx-text-muted" />
+  </button>
+)}
         <button
           onClick={() => (user ? setPanel("Settings") : void signIn())}
           className="w-full mb-3 rounded-2xl glass-subtle interactive-glass px-4 py-3 flex items-center justify-between"

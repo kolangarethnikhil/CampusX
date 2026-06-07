@@ -62,8 +62,34 @@ const marketCategories: MarketCategory[] = [
 
 const conditions: MarketCondition[] = ["New", "Like New", "Good", "Fair"];
 
+function todayDate() {
+  return new Date();
+}
+
+function toDateInputValue(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateInputValue(todayDate());
+}
+
+function addDays(days: number) {
+  const date = todayDate();
+  date.setDate(date.getDate() + days);
+  return toDateInputValue(date);
+}
+
+function formatDateLabel(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function getBoardPostLabel(boardName?: string) {
@@ -196,7 +222,9 @@ export default function CreateListingSheet({
             <p className="text-[11px] text-cx-text-muted mt-1">
               {type === "board"
                 ? `Posting to ${boardName}`
-                : "Post a room or sell campus essentials."}
+                : type === "housing"
+                  ? "Post a room, PG or roommate lead."
+                  : "Sell furniture, books or essentials."}
             </p>
           </div>
 
@@ -272,18 +300,20 @@ export default function CreateListingSheet({
                 />
               </div>
 
-              <SelectRow
+              <OptionGrid
                 label="Room type"
                 value={roomType}
                 options={roomTypes}
                 onChange={(value) => setRoomType(value as HousingRoomType)}
               />
 
-              <SelectRow
+              <OptionGrid
                 label="Furnishing"
                 value={furnishing}
                 options={furnishings}
-                onChange={(value) => setFurnishing(value as HousingFurnishing)}
+                onChange={(value) =>
+                  setFurnishing(value as HousingFurnishing)
+                }
               />
 
               <div>
@@ -296,10 +326,10 @@ export default function CreateListingSheet({
                     <button
                       key={item.value}
                       onClick={() => setPreferTenants(item.value)}
-                      className={`rounded-xl py-2 text-[10px] border ${
+                      className={`rounded-xl py-2 text-[10px] border transition-all ${
                         preferTenants === item.value
                           ? "bg-cx-purple text-white border-cx-purple"
-                          : "border-white/[0.06] text-cx-text-muted"
+                          : "border-white/[0.06] text-cx-text-muted bg-white/[0.02]"
                       }`}
                     >
                       {item.label}
@@ -308,23 +338,51 @@ export default function CreateListingSheet({
                 </div>
               </div>
 
-              <input
-                type="date"
-                value={availableFrom}
-                onChange={(e) => setAvailableFrom(e.target.value)}
-                className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text"
-              />
+              <div>
+                <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+                  Available from
+                </p>
+
+                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3">
+                  <p className="text-[13px] font-medium text-cx-text mb-3">
+                    {formatDateLabel(availableFrom)}
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setAvailableFrom(today())}
+                      className="rounded-xl py-2 text-[10px] border border-white/[0.06] text-cx-text-secondary"
+                    >
+                      Today
+                    </button>
+
+                    <button
+                      onClick={() => setAvailableFrom(addDays(7))}
+                      className="rounded-xl py-2 text-[10px] border border-white/[0.06] text-cx-text-secondary"
+                    >
+                      +7 days
+                    </button>
+
+                    <button
+                      onClick={() => setAvailableFrom(addDays(30))}
+                      className="rounded-xl py-2 text-[10px] border border-white/[0.06] text-cx-text-secondary"
+                    >
+                      +30 days
+                    </button>
+                  </div>
+                </div>
+              </div>
             </>
           ) : type === "market" ? (
             <>
-              <SelectRow
+              <OptionGrid
                 label="Category"
                 value={marketCategory}
                 options={marketCategories}
                 onChange={(value) => setMarketCategory(value as MarketCategory)}
               />
 
-              <SelectRow
+              <OptionGrid
                 label="Condition"
                 value={condition}
                 options={conditions}
@@ -333,10 +391,10 @@ export default function CreateListingSheet({
 
               <button
                 onClick={() => setIsNegotiable((current) => !current)}
-                className={`w-full rounded-2xl px-4 py-3 text-left border ${
+                className={`w-full rounded-2xl px-4 py-3 text-left border transition-all ${
                   isNegotiable
                     ? "border-cx-lime/20 bg-cx-lime/[0.04] text-cx-lime"
-                    : "border-white/[0.06] text-cx-text-muted"
+                    : "border-white/[0.06] text-cx-text-muted bg-white/[0.02]"
                 }`}
               >
                 <span className="text-[12px] font-semibold">
@@ -427,7 +485,7 @@ function TypeButton({
   );
 }
 
-function SelectRow({
+function OptionGrid({
   label,
   value,
   options,
@@ -439,22 +497,26 @@ function SelectRow({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block">
-      <span className="block text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+    <div>
+      <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
         {label}
-      </span>
+      </p>
 
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text bg-cx-card-elevated"
-      >
+      <div className="grid grid-cols-2 gap-2">
         {options.map((option) => (
-          <option key={option} value={option}>
+          <button
+            key={option}
+            onClick={() => onChange(option)}
+            className={`rounded-xl px-3 py-2.5 text-[11px] text-left border transition-all ${
+              value === option
+                ? "bg-cx-purple text-white border-cx-purple"
+                : "border-white/[0.06] text-cx-text-muted bg-white/[0.02]"
+            }`}
+          >
             {option}
-          </option>
+          </button>
         ))}
-      </select>
-    </label>
+      </div>
+    </div>
   );
 }
