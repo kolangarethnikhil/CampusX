@@ -24,11 +24,13 @@ interface SavedPost {
 interface ProfileScreenProps {
   listings?: UiListing[];
   onOpenListing?: (id: string | number) => void;
+  onCreateListing?: (type: "housing" | "market") => void;
 }
 
 export default function ProfileScreen({
   listings,
   onOpenListing,
+  onCreateListing,
 }: ProfileScreenProps) {
   const [activeSection, setActiveSection] = useState<"saved" | "posts">("saved");
   const [panel, setPanel] = useState<string | null>(null);
@@ -221,12 +223,36 @@ export default function ProfileScreen({
         ) : (
           <div className="space-y-3 animate-fade-up">
             {myPosts.length === 0 ? (
-              <EmptyProfileState
-                title="No posts yet"
-                description="Your rooms and essentials will appear here after posting."
-                icon="homeRent"
-              />
-            ) : (
+  <div className="flex flex-col items-center justify-center py-14 rounded-2xl glass-subtle text-center">
+    <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center mb-4 overflow-hidden">
+      <AppIcon name="homeRent" size={42} />
+    </div>
+
+    <p className="text-cx-text font-medium text-[15px] mb-1">
+      No posts yet
+    </p>
+
+    <p className="text-cx-text-muted text-[12px] text-center max-w-[220px]">
+      Your rooms and essentials will appear here after posting.
+    </p>
+
+    <div className="grid grid-cols-2 gap-2 mt-5 w-full">
+      <button
+        onClick={() => onCreateListing?.("housing")}
+        className="rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
+      >
+        Post room
+      </button>
+
+      <button
+        onClick={() => onCreateListing?.("market")}
+        className="rounded-2xl border border-white/[0.08] bg-white/[0.04] py-3 text-[11px] font-semibold text-cx-text"
+      >
+        Sell item
+      </button>
+    </div>
+  </div>
+) : (
               myPosts.map((post) => (
                 <div key={post.id} className="glass-elevated rounded-2xl overflow-hidden">
                   <div className="relative h-36 bg-gradient-to-br from-cx-card-elevated to-cx-card p-4 flex flex-col justify-between overflow-hidden">

@@ -1,28 +1,22 @@
-import { ArrowLeft, Share2, MapPin, Bookmark, Clock } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Bookmark,
+  Clock,
+  MapPin,
+  Plus,
+  Share2,
+} from "lucide-react";
+import { type MouseEvent, useState } from "react";
 import type { UiListing } from "../types/listing";
 
-interface Listing {
-  id: string | number;
+interface BoardMeta {
   title: string;
-  price: string;
-  priceUnit: string;
-  location: string;
-  distance: string;
-  tag: string;
-  tags: string[];
-  author: string;
-  timeAgo: string;
-  description: string;
-  saved?: boolean;
-  sourceType?: "housing" | "market" | "board";
-  raw?: unknown;
+  subtitle: string;
+  emoji: string;
+  accent: string;
 }
 
-const boardMeta: Record<
-  string,
-  { title: string; subtitle: string; emoji: string; accent: string }
-> = {
+const boardMeta: Record<string, BoardMeta> = {
   Housing: {
     title: "Housing",
     subtitle: "PGs & roommates near campus",
@@ -72,17 +66,19 @@ interface BoardListingsScreenProps {
   onBack: () => void;
   listings?: UiListing[];
   loading?: boolean;
+  onCreateListing?: (type: "housing" | "market") => void;
   onOpenListing: (listing: UiListing) => void;
 }
 
 export default function BoardListingsScreen({
   boardName,
-  listings,
-  loading,
+  listings = [],
+  loading = false,
   onBack,
+  onCreateListing,
   onOpenListing,
 }: BoardListingsScreenProps) {
-  const boardBase =
+  const board =
     boardMeta[boardName] || {
       title: boardName,
       subtitle: "",
@@ -90,28 +86,189 @@ export default function BoardListingsScreen({
       accent: "#8b5cf6",
     };
 
-  const board = useMemo(
-    () => ({
-      ...boardBase,
-      listings: (listings || []) as Listing[],
-    }),
-    [boardBase, listings]
+  const [savedIds, setSavedIds] = useState<Set<string>>(
+    new Set(listings.filter((listing) => listing.saved).map((listing) => listing.id))
   );
 
-  const [savedIds, setSavedIds] = useState<Set<string | number>>(
-    new Set(board.listings.filter((l) => l.saved).map((l) => l.id))
-  );
+  const createType =
+    boardName === "Housing"
+      ? "housing"
+      : boardName === "Essentials"
+        ? "market"
+        : null;
 
-  const toggleSave = (id: string | number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const createLabel =
+    boardName === "Housing"
+      ? "Post room"
+      : boardName === "Essentials"
+        ? "Sell item"
+        : "";
 
-    setSavedIds((prev) => {
-      const next = new Set(prev);
+  const toggleSave = (id: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
 
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+    setSavedIds((previous) => {
+      const next = new Set(previous);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
 
       return next;
+    });
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="rounded-2xl glass-subtle p-8 text-center text-[12px] text-cx-text-muted shimmer">
+          Loading posts...
+        </div>
+      );
+    }
+
+    if (listings.length === 0) {
+      return (
+        <div className="rounded-[26px] glass-subtle p-8 text-center">
+          <div
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06]"
+            style={{
+              background: `${board.accent}12`,
+              color: board.accent,
+            }}
+          >
+            <Plus size={22} />
+          </div>
+
+          <p className="text-[15px] font-semibold text-cx-text mb-1">
+            No posts yet
+          </p>
+
+          <p className="text-[11px] text-cx-text-muted max-w-[240px] mx-auto leading-relaxed">
+            {createType
+              ? "Be the first to post something useful for KJU students."
+              : "Real posts from Firebase will appear here."}
+          </p>
+
+          {createType && (
+            <button
+              onClick={() => onCreateListing?.(createType)}
+              className="mt-5 w-full rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
+            >
+              {boardName === "Housing" ? "Post first room" : "Sell first item"}
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    return listings.map((listing, index) => {
+      const isSaved = savedIds.has(listing.id);
+
+      return (
+        <button
+          key={listing.id}
+          onClick={() => onOpenListing(listing)}
+          className="w-full glass-elevated rounded-2xl overflow-hidden text-left interactive-glass animate-fade-up"
+          style={{ animationDelay: `${index * 80}ms` }}
+        >
+          <div
+            className="relative h-28 flex flex-col justify-between p-4"
+            style={{
+              background: `linear-gradient(135deg, ${board.accent}10 0%, transparent 70%)`,
+            }}
+          >
+            <div className="flex items-start justify-between">
+              <span
+                className="text-[9px] font-semibold tracking-wider uppercase text-white px-2.5 py-1 rounded-full"
+                style={{ background: board.accent }}
+              >
+                {listing.tag}
+              </span>
+
+              <div className="flex gap-1.5">
+                <button
+                  onClick={(event) => toggleSave(listing.id, event)}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    isSaved
+                      ? "bg-cx-purple/20 text-cx-purple"
+                      : "glass text-cx-text-secondary"
+                  }`}
+                >
+                  <Bookmark
+                    size={13}
+                    fill={isSaved ? "currentColor" : "none"}
+                  />
+                </button>
+
+                <div className="w-8 h-8 rounded-full glass flex items-center justify-center text-cx-text-secondary">
+                  <Share2 size={13} />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-cx-text text-[10px]">₹</span>
+              <span className="text-cx-text text-[26px] font-semibold leading-none ml-0.5">
+                {listing.price.replace("₹", "")}
+              </span>
+              <span className="text-cx-text-muted text-[10px] ml-1">
+                {listing.priceUnit}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-4">
+            <h3 className="text-[15px] font-semibold text-cx-text mb-1">
+              {listing.title}
+            </h3>
+
+            <p className="text-cx-text-muted text-[12px] mb-3 line-clamp-1">
+              {listing.description}
+            </p>
+
+            <div className="flex items-center gap-1.5 mb-3">
+              <MapPin size={11} className="text-cx-text-muted" />
+              <span className="text-cx-text-secondary text-[10px] tracking-wide">
+                {listing.distance} · {listing.location}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {listing.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="text-[9px] font-medium tracking-wider uppercase glass text-cx-text-secondary px-2 py-1 rounded-md"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-semibold text-white"
+                  style={{ background: board.accent }}
+                >
+                  {listing.author[0] || "C"}
+                </div>
+
+                <span className="text-cx-text-secondary text-[11px]">
+                  {listing.author}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1 text-cx-text-muted">
+                <Clock size={10} />
+                <span className="text-[10px]">{listing.timeAgo}</span>
+              </div>
+            </div>
+          </div>
+        </button>
+      );
     });
   };
 
@@ -125,154 +282,45 @@ export default function BoardListingsScreen({
           <ArrowLeft size={18} className="text-cx-text" />
         </button>
 
-        <div className="flex items-center gap-2.5 flex-1">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <span className="text-xl">{board.emoji}</span>
-          <div>
-            <h2 className="text-[17px] font-semibold text-cx-text">
+
+          <div className="min-w-0">
+            <h2 className="text-[17px] font-semibold text-cx-text truncate">
               {board.title}
             </h2>
-            <p className="text-cx-text-muted text-[10px] tracking-wide uppercase">
+
+            <p className="text-cx-text-muted text-[10px] tracking-wide uppercase truncate">
               {board.subtitle}
             </p>
           </div>
         </div>
 
-        <span
-          className="text-[10px] font-medium px-3 py-1.5 rounded-full"
-          style={{
-            background: `${board.accent}12`,
-            color: board.accent,
-          }}
-        >
-          {board.listings.length} posts
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] font-medium px-3 py-1.5 rounded-full"
+            style={{
+              background: `${board.accent}12`,
+              color: board.accent,
+            }}
+          >
+            {listings.length} posts
+          </span>
+
+          {createType && (
+            <button
+              onClick={() => onCreateListing?.(createType)}
+              className="h-9 px-3 rounded-full bg-white text-black text-[10px] font-semibold flex items-center gap-1.5 active:scale-[0.98] transition-transform"
+            >
+              <Plus size={13} />
+              {createLabel}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 bg-gradient-mesh">
-        <div className="space-y-3">
-          {loading ? (
-            <div className="rounded-2xl glass-subtle p-8 text-center text-[12px] text-cx-text-muted shimmer">
-              Loading posts...
-            </div>
-          ) : board.listings.length === 0 ? (
-            <div className="rounded-2xl glass-subtle p-8 text-center">
-              <p className="text-[14px] font-semibold text-cx-text mb-1">
-                No posts yet
-              </p>
-              <p className="text-[11px] text-cx-text-muted">
-                Real posts from Firebase will appear here.
-              </p>
-            </div>
-          ) : (
-            board.listings.map((listing, i) => (
-              <button
-                key={listing.id}
-                onClick={() =>
-                  onOpenListing({
-                    ...listing,
-                    id: String(listing.id),
-                    sourceType: listing.sourceType || "board",
-                  })
-                }
-                className="w-full glass-elevated rounded-2xl overflow-hidden text-left interactive-glass animate-fade-up"
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div
-                  className="relative h-28 flex flex-col justify-between p-4"
-                  style={{
-                    background: `linear-gradient(135deg, ${board.accent}10 0%, transparent 70%)`,
-                  }}
-                >
-                  <div className="flex items-start justify-between">
-                    <span
-                      className="text-[9px] font-semibold tracking-wider uppercase text-white px-2.5 py-1 rounded-full"
-                      style={{ background: `${board.accent}` }}
-                    >
-                      {listing.tag}
-                    </span>
-
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={(e) => toggleSave(listing.id, e)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                          savedIds.has(listing.id)
-                            ? "bg-cx-purple/20 text-cx-purple"
-                            : "glass text-cx-text-secondary"
-                        }`}
-                      >
-                        <Bookmark
-                          size={13}
-                          fill={savedIds.has(listing.id) ? "currentColor" : "none"}
-                        />
-                      </button>
-
-                      <div className="w-8 h-8 rounded-full glass flex items-center justify-center text-cx-text-secondary">
-                        <Share2 size={13} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-cx-text text-[10px]">₹</span>
-                    <span className="text-cx-text text-[26px] font-semibold leading-none ml-0.5">
-                      {listing.price.replace("₹", "")}
-                    </span>
-                    <span className="text-cx-text-muted text-[10px] ml-1">
-                      {listing.priceUnit}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4">
-                  <h3 className="text-[15px] font-semibold text-cx-text mb-1">
-                    {listing.title}
-                  </h3>
-
-                  <p className="text-cx-text-muted text-[12px] mb-3 line-clamp-1">
-                    {listing.description}
-                  </p>
-
-                  <div className="flex items-center gap-1.5 mb-3">
-                    <MapPin size={11} className="text-cx-text-muted" />
-                    <span className="text-cx-text-secondary text-[10px] tracking-wide">
-                      {listing.distance} · {listing.location}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    {listing.tags.map((tag, j) => (
-                      <span
-                        key={j}
-                        className="text-[9px] font-medium tracking-wider uppercase glass text-cx-text-secondary px-2 py-1 rounded-md"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-white/[0.04]">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-semibold text-white"
-                        style={{ background: board.accent }}
-                      >
-                        {listing.author[0]}
-                      </div>
-                      <span className="text-cx-text-secondary text-[11px]">
-                        {listing.author}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-cx-text-muted">
-                      <Clock size={10} />
-                      <span className="text-[10px]">{listing.timeAgo}</span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
+        <div className="space-y-3">{renderContent()}</div>
       </div>
     </div>
   );

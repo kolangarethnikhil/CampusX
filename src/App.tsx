@@ -147,14 +147,13 @@ export default function App() {
         <ListingDetailScreen listing={subScreen.listing} onBack={handleBack} />
       ) : subScreen?.type === "boardListings" ? (
         <BoardListingsScreen
-          boardName={subScreen.boardName}
-          listings={getBoardListings(subScreen.boardName)}
-          loading={listingsLoading}
-          onBack={handleBack}
-          onOpenListing={(listing) =>
-            handleOpenListing(listing, subScreen.boardName)
-          }
-        />
+  boardName={subScreen.boardName}
+  listings={getBoardListings(subScreen.boardName)}
+  loading={listingsLoading}
+  onBack={handleBack}
+  onCreateListing={(type) => setCreateOpen(type)}
+  onOpenListing={(listing) => handleOpenListing(listing, subScreen.boardName)}
+/>
       ) : (
         <>
           {activeTab === "home" && (
@@ -180,8 +179,11 @@ export default function App() {
           )}
 
           {activeTab === "profile" && (
-            <ProfileScreen listings={[...housingListings, ...marketListings]} />
-          )}
+  <ProfileScreen
+    listings={[...housingListings, ...marketListings]}
+    onCreateListing={(type) => setCreateOpen(type)}
+  />
+)}
         </>
       )}
 
