@@ -16,6 +16,12 @@ interface BoardMeta {
   accent: string;
 }
 
+type CreateIntent = {
+  type: "housing" | "market" | "board";
+  boardName?: string;
+  lockType?: boolean;
+};
+
 const boardMeta: Record<string, BoardMeta> = {
   Housing: {
     title: "Housing",
@@ -66,8 +72,64 @@ interface BoardListingsScreenProps {
   onBack: () => void;
   listings?: UiListing[];
   loading?: boolean;
-  onCreateListing?: (type: "housing" | "market") => void;
+  onCreateListing?: (intent: CreateIntent) => void;
   onOpenListing: (listing: UiListing) => void;
+}
+
+function getCreateIntent(boardName: string): CreateIntent | null {
+  if (boardName === "Housing") {
+    return {
+      type: "housing",
+      boardName,
+      lockType: true,
+    };
+  }
+
+  if (boardName === "Essentials") {
+    return {
+      type: "market",
+      boardName,
+      lockType: true,
+    };
+  }
+
+  if (
+    ["Internships", "Part-time", "Dev Club", "Sports", "Social"].includes(
+      boardName
+    )
+  ) {
+    return {
+      type: "board",
+      boardName,
+      lockType: true,
+    };
+  }
+
+  return null;
+}
+
+function getCreateLabel(boardName: string) {
+  if (boardName === "Housing") return "Post room";
+  if (boardName === "Essentials") return "Sell item";
+  if (boardName === "Internships") return "Post internship";
+  if (boardName === "Part-time") return "Post work";
+  if (boardName === "Sports") return "Post event";
+  if (boardName === "Social") return "Post update";
+  if (boardName === "Dev Club") return "Post update";
+
+  return "Post";
+}
+
+function getEmptyCta(boardName: string) {
+  if (boardName === "Housing") return "Post first room";
+  if (boardName === "Essentials") return "Sell first item";
+  if (boardName === "Internships") return "Post first internship";
+  if (boardName === "Part-time") return "Post first work";
+  if (boardName === "Sports") return "Post first event";
+  if (boardName === "Social") return "Post first update";
+  if (boardName === "Dev Club") return "Post first update";
+
+  return "Create first post";
 }
 
 export default function BoardListingsScreen({
@@ -90,19 +152,8 @@ export default function BoardListingsScreen({
     new Set(listings.filter((listing) => listing.saved).map((listing) => listing.id))
   );
 
-  const createType =
-    boardName === "Housing"
-      ? "housing"
-      : boardName === "Essentials"
-        ? "market"
-        : null;
-
-  const createLabel =
-    boardName === "Housing"
-      ? "Post room"
-      : boardName === "Essentials"
-        ? "Sell item"
-        : "";
+  const createIntent = getCreateIntent(boardName);
+  const createLabel = getCreateLabel(boardName);
 
   const toggleSave = (id: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -147,17 +198,17 @@ export default function BoardListingsScreen({
           </p>
 
           <p className="text-[11px] text-cx-text-muted max-w-[240px] mx-auto leading-relaxed">
-            {createType
+            {createIntent
               ? "Be the first to post something useful for KJU students."
               : "Real posts from Firebase will appear here."}
           </p>
 
-          {createType && (
+          {createIntent && (
             <button
-              onClick={() => onCreateListing?.(createType)}
+              onClick={() => onCreateListing?.(createIntent)}
               className="mt-5 w-full rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
             >
-              {boardName === "Housing" ? "Post first room" : "Sell first item"}
+              {getEmptyCta(boardName)}
             </button>
           )}
         </div>
@@ -307,9 +358,9 @@ export default function BoardListingsScreen({
             {listings.length} posts
           </span>
 
-          {createType && (
+          {createIntent && (
             <button
-              onClick={() => onCreateListing?.(createType)}
+              onClick={() => onCreateListing?.(createIntent)}
               className="h-9 px-3 rounded-full bg-white text-black text-[10px] font-semibold flex items-center gap-1.5 active:scale-[0.98] transition-transform"
             >
               <Plus size={13} />

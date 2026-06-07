@@ -1,31 +1,122 @@
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import AppIcon from "../components/AppIcon";
 import { useAuth } from "../contexts/AuthContext";
 import {
+  boardIdToType,
+  boardNameToId,
+  createBoardPost,
+} from "../services/boardPostService";
+import {
   createListing,
   type CreateListingType,
+  type HousingFurnishing,
+  type HousingRoomType,
+  type HousingTenantPreference,
+  type MarketCategory,
+  type MarketCondition,
 } from "../services/createListingService";
 
+type CreateFlowType = CreateListingType | "board";
+
 interface CreateListingSheetProps {
-  initialType?: CreateListingType;
+  initialType?: CreateFlowType;
+  boardName?: string;
+  lockType?: boolean;
   onClose: () => void;
-  onCreated?: (listingId: string, type: CreateListingType) => void;
+  onCreated?: (listingId: string, type: CreateFlowType) => void;
+}
+
+const roomTypes: HousingRoomType[] = [
+  "roommate",
+  "1RK",
+  "1BHK",
+  "2BHK",
+  "3BHK",
+  "PG",
+];
+
+const furnishings: HousingFurnishing[] = [
+  "Unfurnished",
+  "Semi-furnished",
+  "Fully-furnished",
+];
+
+const tenantPrefs: {
+  value: HousingTenantPreference;
+  label: string;
+}[] = [
+  { value: "both", label: "Any" },
+  { value: "boys_only", label: "Boys" },
+  { value: "girls_only", label: "Girls" },
+  { value: "couples", label: "Couples" },
+];
+
+const marketCategories: MarketCategory[] = [
+  "Furniture",
+  "Electronics",
+  "Books",
+  "Essentials",
+  "Other",
+];
+
+const conditions: MarketCondition[] = ["New", "Like New", "Good", "Fair"];
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getBoardPostLabel(boardName?: string) {
+  if (boardName === "Internships") return "Post internship";
+  if (boardName === "Part-time") return "Post work";
+  if (boardName === "Sports") return "Post event";
+  if (boardName === "Social") return "Post social update";
+  if (boardName === "Dev Club") return "Post club update";
+
+  return "Post update";
 }
 
 export default function CreateListingSheet({
   initialType = "housing",
+  boardName,
+  lockType = false,
   onClose,
   onCreated,
 }: CreateListingSheetProps) {
-  const [type, setType] = useState<CreateListingType>(initialType);
+  const [type, setType] = useState<CreateFlowType>(initialType);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+
   const [price, setPrice] = useState("");
+  const [deposit, setDeposit] = useState("");
+  const [maintenance, setMaintenance] = useState("");
+
+  const [roomType, setRoomType] = useState<HousingRoomType>("roommate");
+  const [furnishing, setFurnishing] =
+    useState<HousingFurnishing>("Unfurnished");
+  const [preferTenants, setPreferTenants] =
+    useState<HousingTenantPreference>("both");
+  const [availableFrom, setAvailableFrom] = useState(today());
+
+  const [marketCategory, setMarketCategory] =
+    useState<MarketCategory>("Essentials");
+  const [condition, setCondition] = useState<MarketCondition>("Good");
+  const [isNegotiable, setIsNegotiable] = useState(true);
+
+  const [location, setLocation] = useState("KJU Campus");
+  const [tags, setTags] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const { user, signIn } = useAuth();
+
+  const priceLabel = useMemo(() => {
+    if (type === "housing") return "Monthly rent";
+    if (type === "market") return "Selling price";
+    return "Amount (optional)";
+  }, [type]);
 
   const submit = async () => {
     setError("");
@@ -38,19 +129,52 @@ export default function CreateListingSheet({
     setBusy(true);
 
     try {
-      const id = await createListing({
-        type,
-        title,
-        description,
-        price: Number(price),
-        category: type === "market" ? "Essentials" : undefined,
-        roomType: type === "housing" ? "roommate" : undefined,
-      });
+      let id = "";
+
+      if (type === "housing") {
+        id = await createListing({
+          type: "housing",
+          title,
+          description,
+          rent: Number(price),
+          deposit: Number(deposit || 0),
+          maintenance: Number(maintenance || 0),
+          roomType,
+          furnishing,
+          preferTenants,
+          availableFrom,
+        });
+      } else if (type === "market") {
+        id = await createListing({
+          type: "market",
+          title,
+          description,
+          price: Number(price),
+          category: marketCategory,
+          condition,
+          isNegotiable,
+        });
+      } else {
+        const boardId = boardNameToId(boardName || "general");
+
+        id = await createBoardPost({
+          boardId,
+          title,
+          description,
+          type: boardIdToType(boardId),
+          price: Number(price || 0),
+          location,
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+        });
+      }
 
       onCreated?.(id, type);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create listing.");
+      setError(err instanceof Error ? err.message : "Could not create post.");
     } finally {
       setBusy(false);
     }
@@ -60,16 +184,19 @@ export default function CreateListingSheet({
     <div className="absolute inset-0 z-[90] bg-black/70 flex items-end animate-fade-in">
       <button className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[82%] overflow-y-auto">
+      <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[86%] overflow-y-auto">
         <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
 
         <div className="flex items-center justify-between mb-5">
           <div>
             <h3 className="text-[22px] font-semibold text-cx-text tracking-[-0.04em]">
-              Create post
+              {type === "board" ? getBoardPostLabel(boardName) : "Create post"}
             </h3>
+
             <p className="text-[11px] text-cx-text-muted mt-1">
-              Post a room or sell campus essentials.
+              {type === "board"
+                ? `Posting to ${boardName}`
+                : "Post a room or sell campus essentials."}
             </p>
           </div>
 
@@ -81,41 +208,27 @@ export default function CreateListingSheet({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <button
-            onClick={() => setType("housing")}
-            className={`rounded-2xl p-3 text-left border transition-all ${
-              type === "housing"
-                ? "border-cx-amber/35 bg-cx-amber/[0.08]"
-                : "border-white/[0.06] bg-white/[0.025]"
-            }`}
-          >
-            <AppIcon name="homeRent" size={34} />
-            <p className="text-[12px] font-semibold text-cx-text mt-2">
-              Housing
-            </p>
-            <p className="text-[9px] text-cx-text-muted">
-              Room / PG / roommate
-            </p>
-          </button>
+        {!lockType && (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <TypeButton
+              active={type === "housing"}
+              icon="homeRent"
+              title="Housing"
+              subtitle="Room / PG / roommate"
+              onClick={() => setType("housing")}
+              tone="amber"
+            />
 
-          <button
-            onClick={() => setType("market")}
-            className={`rounded-2xl p-3 text-left border transition-all ${
-              type === "market"
-                ? "border-cx-pink/35 bg-cx-pink/[0.08]"
-                : "border-white/[0.06] bg-white/[0.025]"
-            }`}
-          >
-            <AppIcon name="sofa" size={34} />
-            <p className="text-[12px] font-semibold text-cx-text mt-2">
-              Essentials
-            </p>
-            <p className="text-[9px] text-cx-text-muted">
-              Furniture, books & more
-            </p>
-          </button>
-        </div>
+            <TypeButton
+              active={type === "market"}
+              icon="sofa"
+              title="Essentials"
+              subtitle="Furniture, books & more"
+              onClick={() => setType("market")}
+              tone="pink"
+            />
+          </div>
+        )}
 
         <div className="space-y-3">
           <input
@@ -124,7 +237,9 @@ export default function CreateListingSheet({
             placeholder={
               type === "housing"
                 ? "e.g. 1BHK near Kothanur"
-                : "e.g. Study table + chair"
+                : type === "market"
+                  ? "e.g. Study table + chair"
+                  : "e.g. Hackathon this weekend"
             }
             className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
           />
@@ -133,9 +248,119 @@ export default function CreateListingSheet({
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             inputMode="numeric"
-            placeholder={type === "housing" ? "Monthly rent" : "Selling price"}
+            placeholder={priceLabel}
             className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
           />
+
+          {type === "housing" ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  value={deposit}
+                  onChange={(e) => setDeposit(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="Deposit"
+                  className="input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
+                />
+
+                <input
+                  value={maintenance}
+                  onChange={(e) => setMaintenance(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="Maintenance"
+                  className="input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
+                />
+              </div>
+
+              <SelectRow
+                label="Room type"
+                value={roomType}
+                options={roomTypes}
+                onChange={(value) => setRoomType(value as HousingRoomType)}
+              />
+
+              <SelectRow
+                label="Furnishing"
+                value={furnishing}
+                options={furnishings}
+                onChange={(value) => setFurnishing(value as HousingFurnishing)}
+              />
+
+              <div>
+                <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+                  Preference
+                </p>
+
+                <div className="grid grid-cols-4 gap-1.5">
+                  {tenantPrefs.map((item) => (
+                    <button
+                      key={item.value}
+                      onClick={() => setPreferTenants(item.value)}
+                      className={`rounded-xl py-2 text-[10px] border ${
+                        preferTenants === item.value
+                          ? "bg-cx-purple text-white border-cx-purple"
+                          : "border-white/[0.06] text-cx-text-muted"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <input
+                type="date"
+                value={availableFrom}
+                onChange={(e) => setAvailableFrom(e.target.value)}
+                className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text"
+              />
+            </>
+          ) : type === "market" ? (
+            <>
+              <SelectRow
+                label="Category"
+                value={marketCategory}
+                options={marketCategories}
+                onChange={(value) => setMarketCategory(value as MarketCategory)}
+              />
+
+              <SelectRow
+                label="Condition"
+                value={condition}
+                options={conditions}
+                onChange={(value) => setCondition(value as MarketCondition)}
+              />
+
+              <button
+                onClick={() => setIsNegotiable((current) => !current)}
+                className={`w-full rounded-2xl px-4 py-3 text-left border ${
+                  isNegotiable
+                    ? "border-cx-lime/20 bg-cx-lime/[0.04] text-cx-lime"
+                    : "border-white/[0.06] text-cx-text-muted"
+                }`}
+              >
+                <span className="text-[12px] font-semibold">
+                  {isNegotiable ? "Negotiable" : "Fixed price"}
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              <input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Location"
+                className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
+              />
+
+              <input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Tags separated by comma"
+                className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
+              />
+            </>
+          )}
 
           <textarea
             value={description}
@@ -147,8 +372,8 @@ export default function CreateListingSheet({
 
         <div className="mt-4 rounded-2xl border border-cx-amber/15 bg-cx-amber/[0.035] p-3">
           <p className="text-[10px] text-cx-text-muted leading-relaxed">
-            For now posts use KJU as default location. In the next pass we will
-            add map picker, images and advanced fields.
+            Location currently defaults to KJU for housing/essentials. Next pass
+            adds map picker and Supabase image upload.
           </p>
         </div>
 
@@ -163,5 +388,73 @@ export default function CreateListingSheet({
         </button>
       </div>
     </div>
+  );
+}
+
+function TypeButton({
+  active,
+  icon,
+  title,
+  subtitle,
+  onClick,
+  tone,
+}: {
+  active: boolean;
+  icon: "homeRent" | "sofa";
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+  tone: "amber" | "pink";
+}) {
+  const activeClass =
+    tone === "amber"
+      ? "border-cx-amber/35 bg-cx-amber/[0.08]"
+      : "border-cx-pink/35 bg-cx-pink/[0.08]";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-2xl p-3 text-left border transition-all ${
+        active ? activeClass : "border-white/[0.06] bg-white/[0.025]"
+      }`}
+    >
+      <AppIcon name={icon} size={34} />
+
+      <p className="text-[12px] font-semibold text-cx-text mt-2">{title}</p>
+
+      <p className="text-[9px] text-cx-text-muted">{subtitle}</p>
+    </button>
+  );
+}
+
+function SelectRow({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+        {label}
+      </span>
+
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text bg-cx-card-elevated"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

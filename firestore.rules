@@ -550,7 +550,56 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.requestedBy == request.auth.uid);
       allow update, delete: if isAdmin();
     }
+    match /board_posts/{postId} {
+      allow read: if resource.data.status == 'active' || isAdmin();
 
+      allow create: if signedIn()
+        && incoming().postedBy == request.auth.uid
+        && incoming().campusId is string
+        && incoming().boardId in ['internships', 'part-time', 'dev-club', 'sports', 'social', 'general']
+        && validString(incoming().title, 100)
+        && validString(incoming().description, 2000)
+        && incoming().type in ['internship', 'part_time', 'event', 'club', 'social', 'general']
+        && (!('price' in incoming()) || incoming().price is number)
+        && optionalString(incoming().location, 300)
+        && incoming().tags is list
+        && incoming().status == 'active'
+        && incoming().keys().hasOnly([
+          'campusId',
+          'boardId',
+          'title',
+          'description',
+          'type',
+          'price',
+          'location',
+          'tags',
+          'postedBy',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]);
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && existing().postedBy == request.auth.uid
+          && incoming().postedBy == existing().postedBy
+          && incoming().campusId == existing().campusId
+          && incoming().boardId == existing().boardId
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title',
+            'description',
+            'price',
+            'location',
+            'tags',
+            'status',
+            'updatedAt'
+          ])
+          && incoming().status in ['active', 'closed', 'expired', 'deleted']
+        );
+
+      allow delete: if false;
+    }
     match /listing_reports/{reportId} {
       allow create: if signedIn()
         && incoming().reporterId == request.auth.uid
