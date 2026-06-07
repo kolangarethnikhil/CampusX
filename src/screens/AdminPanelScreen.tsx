@@ -317,15 +317,18 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
       </div>
 
       {createOpen && (
-        <CreateSpaceSheet
-          onClose={() => setCreateOpen(false)}
-          onCreate={(input) =>
-            run(() => createAdminSpace(input), "Space created.").then(() =>
-              setCreateOpen(false)
-            )
-          }
-        />
-      )}
+  <CreateSpaceSheet
+    onClose={() => setCreateOpen(false)}
+    onCreate={async (input) => {
+      setStatus("");
+
+      await createAdminSpace(input);
+
+      setStatus("Space created.");
+      setCreateOpen(false);
+    }}
+  />
+)}
     </div>
   );
 }
@@ -401,6 +404,7 @@ function RequestCard({
   );
 }
 
+
 function CreateSpaceSheet({
   onClose,
   onCreate,
@@ -419,6 +423,39 @@ function CreateSpaceSheet({
   const [category, setCategory] = useState<SpaceCategory>("general");
   const [icon, setIcon] = useState<AppIconName>("networking");
   const [accent, setAccent] = useState("#8b5cf6");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+
+    if (name.trim().length < 3) {
+      setError("Space name must be at least 3 characters.");
+      return;
+    }
+
+    if (description.trim().length < 10) {
+      setError("Description must be at least 10 characters.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onCreate({
+        name,
+        description,
+        category,
+        icon,
+        accent,
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Could not create space.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="absolute inset-0 z-[100] bg-black/70 flex items-end animate-fade-in">
@@ -427,26 +464,36 @@ function CreateSpaceSheet({
       <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[86%] overflow-y-auto">
         <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
 
-        <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
-          Create space
-        </h3>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
+              Create space
+            </h3>
+            <p className="text-[11px] text-cx-text-muted mt-1">
+              Admin-created official campus room.
+            </p>
+          </div>
 
-        <p className="text-[11px] text-cx-text-muted mt-1 mb-5">
-          Admin-created official campus room.
-        </p>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full glass flex items-center justify-center"
+          >
+            <X size={17} className="text-cx-text-secondary" />
+          </button>
+        </div>
 
         <div className="space-y-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Space name"
+            placeholder="Space name, e.g. Housing Help"
             className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
           />
 
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description"
+            placeholder="Description, e.g. Roommate help, PG leads and housing questions."
             className="w-full min-h-[90px] input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted resize-none"
           />
 
@@ -514,19 +561,18 @@ function CreateSpaceSheet({
           </div>
         </div>
 
+        {error && (
+          <p className="mt-4 rounded-2xl border border-red-500/15 bg-red-500/[0.05] px-4 py-3 text-[11px] text-red-400">
+            {error}
+          </p>
+        )}
+
         <button
-          onClick={() =>
-            onCreate({
-              name,
-              description,
-              category,
-              icon,
-              accent,
-            })
-          }
-          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black"
+          onClick={submit}
+          disabled={busy}
+          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black disabled:opacity-50"
         >
-          Create official space
+          {busy ? "Creating..." : "Create official space"}
         </button>
       </div>
     </div>
