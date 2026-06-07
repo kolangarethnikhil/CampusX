@@ -4,21 +4,22 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "admin:set": "node scripts/set-admin-claim.mjs"
-  },
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "typecheck": "tsc --noEmit",
+  "admin:set": "node scripts/set-admin-claim.mjs",
+  "seed:spaces": "node scripts/seed-kju-spaces.mjs"
+},
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.4",
     "clsx": "2.1.1",
-    "firebase": "^12.12.1",
-    "firebase-admin": "^13.10.0",
     "lucide-react": "^1.16.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tailwind-merge": "3.4.0"
+    "tailwind-merge": "3.4.0",
+    "firebase": "^12.12.1",
+    "@supabase/supabase-js": "^2.105.4",
+    "firebase-admin": "^13.10.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.17",
@@ -26,10 +27,10 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
-    "dotenv": "^17.4.2",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "7.3.2",
-    "vite-plugin-singlefile": "2.3.0"
+    "vite-plugin-singlefile": "2.3.0",
+    "dotenv": "^17.2.3"
   }
 }
