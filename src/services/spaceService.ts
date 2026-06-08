@@ -94,13 +94,16 @@ export async function joinSpace(space: CampusSpace): Promise<void> {
   const uid = requireCurrentUserId();
 
   try {
+    const token = await user?.getIdTokenResult();
+    const role = token?.claims.admin === true ? "admin" : "member";
+
     await setDoc(
       doc(db, COLLECTION_NAME, space.id, "members", uid),
       {
         spaceId: space.id,
         userId: uid,
         campusId: space.campusId,
-        role: "member",
+        role,
         status: "active",
         displayName: user?.displayName || "CampusX user",
         photoURL: user?.photoURL || "",
@@ -111,7 +114,11 @@ export async function joinSpace(space: CampusSpace): Promise<void> {
       { merge: true }
     );
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, `${COLLECTION_NAME}/${space.id}/members`);
+    handleFirestoreError(
+      error,
+      OperationType.CREATE,
+      `${COLLECTION_NAME}/${space.id}/members`
+    );
   }
 }
 

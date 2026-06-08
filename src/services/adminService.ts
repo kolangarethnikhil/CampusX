@@ -409,11 +409,14 @@ export async function updateSpaceStatus(
   });
 }
 
+function getListingCollectionName(listing: AdminListingItem) {
+  return listing.listingType === "housing"
+    ? "housing_listings"
+    : "marketplace_listings";
+}
+
 export async function hideListing(listing: AdminListingItem) {
-  const collectionName =
-    listing.listingType === "housing"
-      ? "housing_listings"
-      : "marketplace_listings";
+  const collectionName = getListingCollectionName(listing);
 
   await updateDoc(doc(db, collectionName, listing.id), {
     status: "deleted",
@@ -422,14 +425,30 @@ export async function hideListing(listing: AdminListingItem) {
   });
 }
 
+export async function unhideListing(listing: AdminListingItem) {
+  const collectionName = getListingCollectionName(listing);
+
+  await updateDoc(doc(db, collectionName, listing.id), {
+    status: "available",
+    deletedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function closeListing(listing: AdminListingItem) {
-  const collectionName =
-    listing.listingType === "housing"
-      ? "housing_listings"
-      : "marketplace_listings";
+  const collectionName = getListingCollectionName(listing);
 
   await updateDoc(doc(db, collectionName, listing.id), {
     status: "closed",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function reopenListing(listing: AdminListingItem) {
+  const collectionName = getListingCollectionName(listing);
+
+  await updateDoc(doc(db, collectionName, listing.id), {
+    status: "available",
     updatedAt: serverTimestamp(),
   });
 }

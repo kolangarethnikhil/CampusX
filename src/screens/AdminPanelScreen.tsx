@@ -13,6 +13,8 @@ import {
   approveModeratorRequest,
   approveSpaceRequest,
   closeListing,
+   reopenListing,
+  unhideListing,
   createAdminSpace,
   hideListing,
   markReportReviewed,
@@ -310,100 +312,90 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
           </div>
         )}
 
-        {tab === "moderators" && (
-          <div className="space-y-3">
-            {moderatorRequests.length === 0 ? (
-              <EmptyAdminState title="No pending moderator requests" />
-            ) : (
-              moderatorRequests.map((request) => (
-                <RequestCard
-                  key={request.id}
-                  title="Moderator request"
-                  subtitle={`${request.spaceId} · ${
-                    request.requestedByName || "CampusX user"
-                  }`}
-                  description={request.reason}
-                  onApprove={() =>
-                    user &&
-                    run(
-                      () => approveModeratorRequest(request, user.uid),
-                      "Moderator approved."
-                    )
-                  }
-                  onReject={() =>
-                    user &&
-                    run(
-                      () => rejectModeratorRequest(request.id, user.uid),
-                      "Moderator request rejected."
-                    )
-                  }
-                />
-              ))
-            )}
-          </div>
-        )}
+        {tab === "listings" && (
+  <div className="space-y-3">
+    {listings.length === 0 ? (
+      <EmptyAdminState title="No listings found" />
+    ) : (
+      listings.map((listing) => {
+        const isHidden =
+          listing.status === "deleted" || listing.status === "hidden";
+        const isClosed = listing.status === "closed";
 
-        {tab === "reports" && (
-          <div className="space-y-3">
-            {reports.length === 0 ? (
-              <EmptyAdminState title="No open reports" />
-            ) : (
-              reports.map((report) => (
-                <div
-                  key={report.id}
-                  className="glass-elevated rounded-[22px] p-4"
+        return (
+          <div
+            key={`${listing.listingType}-${listing.id}`}
+            className="glass-elevated rounded-[22px] p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[14px] font-semibold text-cx-text truncate">
+                  {listing.title}
+                </p>
+
+                <p className="text-[10px] text-cx-text-muted mt-1">
+                  {listing.listingType} · ₹
+                  {Number(listing.price || 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+
+              <span
+                className={`text-[9px] px-2 py-1 rounded-full uppercase ${
+                  isHidden
+                    ? "bg-red-500/[0.08] text-red-400"
+                    : isClosed
+                      ? "bg-cx-amber/[0.08] text-cx-amber"
+                      : "bg-cx-lime/[0.08] text-cx-lime"
+                }`}
+              >
+                {isHidden ? "hidden" : listing.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              {isHidden ? (
+                <button
+                  onClick={() =>
+                    run(() => unhideListing(listing), "Listing is visible again.")
+                  }
+                  className="col-span-2 rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
                 >
-                  <p className="text-[14px] font-semibold text-cx-text">
-                    {report.listingTitle || "Reported listing"}
-                  </p>
-                  <p className="text-[10px] text-cx-text-muted mt-1">
-                    {report.listingType} · {report.reason}
-                  </p>
+                  Unhide listing
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() =>
+                      run(
+                        () =>
+                          isClosed
+                            ? reopenListing(listing)
+                            : closeListing(listing),
+                        isClosed ? "Listing reopened." : "Listing closed."
+                      )
+                    }
+                    className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
+                  >
+                    {isClosed ? "Reopen" : "Close"}
+                  </button>
 
-                  {report.details && (
-                    <p className="text-[12px] text-cx-text-secondary leading-relaxed mt-3">
-                      {report.details}
-                    </p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 mt-4">
-                    <button
-                      onClick={() =>
-                        user &&
-                        run(
-                          () =>
-                            markReportReviewed(report.id, user.uid, "dismissed"),
-                          "Report dismissed."
-                        )
-                      }
-                      className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
-                    >
-                      Dismiss
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        user &&
-                        run(
-                          () =>
-                            markReportReviewed(
-                              report.id,
-                              user.uid,
-                              "action_taken"
-                            ),
-                          "Report marked action taken."
-                        )
-                      }
-                      className="rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
-                    >
-                      Action taken
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
+                  <button
+                    onClick={() =>
+                      run(() => hideListing(listing), "Listing hidden.")
+                    }
+                    className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400"
+                  >
+                    Hide
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        )}
+        );
+      })
+    )}
+  </div>
+)}
 
         {tab === "listings" && (
           <div className="space-y-3">
