@@ -12,18 +12,25 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   approveModeratorRequest,
   approveSpaceRequest,
+  closeListing,
   createAdminSpace,
+  hideListing,
+  markReportReviewed,
   rejectModeratorRequest,
   rejectSpaceRequest,
+  subscribeAdminListings,
   subscribeAdminModeratorRequests,
+  subscribeAdminReports,
   subscribeAdminSpaceRequests,
   subscribeAdminSpaces,
   updateSpaceStatus,
+  type AdminListingItem,
+  type AdminListingReport,
 } from "../services/adminService";
 import type { ModeratorRequest, SpaceRequest } from "../types/moderation";
 import type { CampusSpace, SpaceCategory } from "../types/space";
 
-type AdminTab = "spaces" | "spaceRequests" | "moderators";
+type AdminTab = "spaces" | "spaceRequests" | "moderators" | "reports" | "listings";
 
 const categories: SpaceCategory[] = [
   "dev",
@@ -65,6 +72,8 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
   const [moderatorRequests, setModeratorRequests] = useState<
     ModeratorRequest[]
   >([]);
+  const [reports, setReports] = useState<AdminListingReport[]>([]);
+  const [listings, setListings] = useState<AdminListingItem[]>([]);
   const [status, setStatus] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -81,11 +90,15 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
     const unsubSpaceRequests = subscribeAdminSpaceRequests(setSpaceRequests);
     const unsubModeratorRequests =
       subscribeAdminModeratorRequests(setModeratorRequests);
+    const unsubReports = subscribeAdminReports(setReports);
+    const unsubListings = subscribeAdminListings(setListings);
 
     return () => {
       unsubSpaces();
       unsubSpaceRequests();
       unsubModeratorRequests();
+      unsubReports();
+      unsubListings();
     };
   }, [isAdmin]);
 
@@ -159,7 +172,7 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
               Admin Panel
             </h1>
             <p className="text-[11px] text-cx-text-muted">
-              Spaces, requests and moderators
+              Spaces, requests, reports and listings
             </p>
           </div>
 
@@ -171,7 +184,7 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 rounded-2xl glass p-1">
+        <div className="flex gap-2 overflow-x-auto rounded-2xl glass p-1">
           <TabButton
             active={tab === "spaces"}
             label="Spaces"
@@ -190,6 +203,18 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
             count={moderatorRequests.length}
             onClick={() => setTab("moderators")}
           />
+          <TabButton
+            active={tab === "reports"}
+            label="Reports"
+            count={reports.length}
+            onClick={() => setTab("reports")}
+          />
+          <TabButton
+            active={tab === "listings"}
+            label="Listings"
+            count={listings.length}
+            onClick={() => setTab("listings")}
+          />
         </div>
       </div>
 
@@ -206,7 +231,10 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
               <EmptyAdminState title="No spaces yet" />
             ) : (
               spaces.map((space) => (
-                <div key={space.id} className="glass-elevated rounded-[22px] p-4">
+                <div
+                  key={space.id}
+                  className="glass-elevated rounded-[22px] p-4"
+                >
                   <div className="flex items-center gap-3">
                     <div
                       className="w-12 h-12 rounded-2xl glass flex items-center justify-center overflow-hidden"
@@ -314,21 +342,131 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
             )}
           </div>
         )}
+
+        {tab === "reports" && (
+          <div className="space-y-3">
+            {reports.length === 0 ? (
+              <EmptyAdminState title="No open reports" />
+            ) : (
+              reports.map((report) => (
+                <div
+                  key={report.id}
+                  className="glass-elevated rounded-[22px] p-4"
+                >
+                  <p className="text-[14px] font-semibold text-cx-text">
+                    {report.listingTitle || "Reported listing"}
+                  </p>
+                  <p className="text-[10px] text-cx-text-muted mt-1">
+                    {report.listingType} · {report.reason}
+                  </p>
+
+                  {report.details && (
+                    <p className="text-[12px] text-cx-text-secondary leading-relaxed mt-3">
+                      {report.details}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <button
+                      onClick={() =>
+                        user &&
+                        run(
+                          () =>
+                            markReportReviewed(report.id, user.uid, "dismissed"),
+                          "Report dismissed."
+                        )
+                      }
+                      className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
+                    >
+                      Dismiss
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        user &&
+                        run(
+                          () =>
+                            markReportReviewed(
+                              report.id,
+                              user.uid,
+                              "action_taken"
+                            ),
+                          "Report marked action taken."
+                        )
+                      }
+                      className="rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
+                    >
+                      Action taken
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "listings" && (
+          <div className="space-y-3">
+            {listings.length === 0 ? (
+              <EmptyAdminState title="No listings found" />
+            ) : (
+              listings.map((listing) => (
+                <div
+                  key={`${listing.listingType}-${listing.id}`}
+                  className="glass-elevated rounded-[22px] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-semibold text-cx-text truncate">
+                        {listing.title}
+                      </p>
+                      <p className="text-[10px] text-cx-text-muted mt-1">
+                        {listing.listingType} · {listing.status} · ₹
+                        {Number(listing.price || 0).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+
+                    <span className="text-[9px] px-2 py-1 rounded-full bg-white/[0.04] text-cx-text-muted uppercase">
+                      {listing.category || listing.roomType || "post"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <button
+                      onClick={() =>
+                        run(() => closeListing(listing), "Listing closed.")
+                      }
+                      className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
+                    >
+                      Close
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        run(() => hideListing(listing), "Listing hidden.")
+                      }
+                      className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400"
+                    >
+                      Hide
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {createOpen && (
-  <CreateSpaceSheet
-    onClose={() => setCreateOpen(false)}
-    onCreate={async (input) => {
-      setStatus("");
-
-      await createAdminSpace(input);
-
-      setStatus("Space created.");
-      setCreateOpen(false);
-    }}
-  />
-)}
+        <CreateSpaceSheet
+          onClose={() => setCreateOpen(false)}
+          onCreate={(input) =>
+            run(() => createAdminSpace(input), "Space created.").then(() =>
+              setCreateOpen(false)
+            )
+          }
+        />
+      )}
     </div>
   );
 }
@@ -347,7 +485,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl py-2 text-[10px] font-semibold ${
+      className={`shrink-0 rounded-xl px-3 py-2 text-[10px] font-semibold ${
         active ? "bg-cx-purple text-white" : "text-cx-text-muted"
       }`}
     >
@@ -404,7 +542,6 @@ function RequestCard({
   );
 }
 
-
 function CreateSpaceSheet({
   onClose,
   onCreate,
@@ -423,39 +560,6 @@ function CreateSpaceSheet({
   const [category, setCategory] = useState<SpaceCategory>("general");
   const [icon, setIcon] = useState<AppIconName>("networking");
   const [accent, setAccent] = useState("#8b5cf6");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const submit = async () => {
-    setError("");
-
-    if (name.trim().length < 3) {
-      setError("Space name must be at least 3 characters.");
-      return;
-    }
-
-    if (description.trim().length < 10) {
-      setError("Description must be at least 10 characters.");
-      return;
-    }
-
-    setBusy(true);
-
-    try {
-      await onCreate({
-        name,
-        description,
-        category,
-        icon,
-        accent,
-      });
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Could not create space.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="absolute inset-0 z-[100] bg-black/70 flex items-end animate-fade-in">
@@ -464,36 +568,26 @@ function CreateSpaceSheet({
       <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[86%] overflow-y-auto">
         <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
 
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
-              Create space
-            </h3>
-            <p className="text-[11px] text-cx-text-muted mt-1">
-              Admin-created official campus room.
-            </p>
-          </div>
+        <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
+          Create space
+        </h3>
 
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full glass flex items-center justify-center"
-          >
-            <X size={17} className="text-cx-text-secondary" />
-          </button>
-        </div>
+        <p className="text-[11px] text-cx-text-muted mt-1 mb-5">
+          Admin-created official campus room.
+        </p>
 
         <div className="space-y-3">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Space name, e.g. Housing Help"
+            placeholder="Space name"
             className="w-full input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted"
           />
 
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description, e.g. Roommate help, PG leads and housing questions."
+            placeholder="Description"
             className="w-full min-h-[90px] input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted resize-none"
           />
 
@@ -561,18 +655,19 @@ function CreateSpaceSheet({
           </div>
         </div>
 
-        {error && (
-          <p className="mt-4 rounded-2xl border border-red-500/15 bg-red-500/[0.05] px-4 py-3 text-[11px] text-red-400">
-            {error}
-          </p>
-        )}
-
         <button
-          onClick={submit}
-          disabled={busy}
-          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black disabled:opacity-50"
+          onClick={() =>
+            onCreate({
+              name,
+              description,
+              category,
+              icon,
+              accent,
+            })
+          }
+          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black"
         >
-          {busy ? "Creating..." : "Create official space"}
+          Create official space
         </button>
       </div>
     </div>

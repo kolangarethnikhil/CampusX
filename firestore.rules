@@ -194,15 +194,14 @@ service cloud.firestore {
         && incoming().postedBy == request.auth.uid
         && validHousingListing(incoming());
 
-      allow update: if signedIn()
-        && (
-          (
-            isOwner(existing().postedBy)
-            && incoming().postedBy == existing().postedBy
-            && listingCountersUnchanged()
-            && validHousingListing(incoming())
-          )
-        );
+      allow update: if isAdmin()
+  || (
+    signedIn()
+    && isOwner(existing().postedBy)
+    && incoming().postedBy == existing().postedBy
+    && listingCountersUnchanged()
+    && validHousingListing(incoming())
+  );
 
       allow delete: if false;
 
@@ -252,15 +251,14 @@ service cloud.firestore {
         && incoming().postedBy == request.auth.uid
         && validMarketplaceListing(incoming());
 
-      allow update: if signedIn()
-        && (
-          (
-            isOwner(existing().postedBy)
-            && incoming().postedBy == existing().postedBy
-            && listingCountersUnchanged()
-            && validMarketplaceListing(incoming())
-          )
-        );
+      allow update: if isAdmin()
+  || (
+    signedIn()
+    && isOwner(existing().postedBy)
+    && incoming().postedBy == existing().postedBy
+    && listingCountersUnchanged()
+    && validMarketplaceListing(incoming())
+  );
 
       allow delete: if false;
 
@@ -619,7 +617,8 @@ service cloud.firestore {
         ]
         && incoming().status == 'open';
 
-      allow read, update, delete: if false;
+      allow read, update: if isAdmin();
+allow delete: if false;
     }
 
     match /reports/{reportId} {

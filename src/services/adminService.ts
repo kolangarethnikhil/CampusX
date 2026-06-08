@@ -21,6 +21,31 @@ export interface CreateAdminSpaceInput {
   accent: string;
 }
 
+export interface AdminListingReport {
+  id: string;
+  listingId: string;
+  listingType: "housing" | "market";
+  listingTitle: string;
+  listingOwnerId: string;
+  reporterId: string;
+  reason: string;
+  details?: string;
+  status: "open" | "reviewed" | "action_taken" | "dismissed";
+  createdAt?: { toMillis?: () => number };
+}
+
+export interface AdminListingItem {
+  id: string;
+  listingType: "housing" | "market";
+  title: string;
+  price: number;
+  status: string;
+  postedBy: string;
+  category?: string;
+  roomType?: string;
+  createdAt?: { toMillis?: () => number };
+}
+
 function slugify(value: string) {
   return value
     .trim()
@@ -56,6 +81,13 @@ function normalizeSpace(id: string, data: Record<string, unknown>): CampusSpace 
   };
 }
 
+function byNewest(
+  a?: { toMillis?: () => number },
+  b?: { toMillis?: () => number }
+) {
+  return (b?.toMillis?.() || 0) - (a?.toMillis?.() || 0);
+}
+
 export function subscribeAdminSpaceRequests(
   callback: (items: SpaceRequest[]) => void
 ) {
@@ -70,11 +102,7 @@ export function subscribeAdminSpaceRequests(
       callback(
         snapshot.docs
           .map((item) => normalizeSpaceRequest(item.id, item.data()))
-          .sort(
-            (a, b) =>
-              (b.createdAt?.toMillis?.() || 0) -
-              (a.createdAt?.toMillis?.() || 0)
-          )
+          .sort((a, b) => byNewest(a.createdAt, b.createdAt))
       );
     },
     (error) => {
@@ -98,11 +126,7 @@ export function subscribeAdminModeratorRequests(
       callback(
         snapshot.docs
           .map((item) => normalizeModeratorRequest(item.id, item.data()))
-          .sort(
-            (a, b) =>
-              (b.createdAt?.toMillis?.() || 0) -
-              (a.createdAt?.toMillis?.() || 0)
-          )
+          .sort((a, b) => byNewest(a.createdAt, b.createdAt))
       );
     },
     (error) => {
@@ -129,6 +153,109 @@ export function subscribeAdminSpaces(callback: (items: CampusSpace[]) => void) {
       callback([]);
     }
   );
+}
+
+export function subscribeAdminReports(
+  callback: (items: AdminListingReport[]) => void
+) {
+  const q = query(
+    collection(db, "listing_reports"),
+    where("status", "==", "open")
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      callback(
+        snapshot.docs
+          .map((item) => ({
+            id: item.id,
+            ...(item.data() as Omit<AdminListingReport, "id">),
+          }))
+          .sort((a, b) => byNewest(a.createdAt, b.createdAt))
+      );
+    },
+    (error) => {
+      console.error("subscribeAdminReports failed", error);
+      callback([]);
+    }
+  );
+}
+
+export function subscribeAdminListings(
+  callback: (items: AdminListingItem[]) => void
+) {
+  const unsubscribers: Array<() => void> = [];
+
+  let housing: AdminListingItem[] = [];
+  let market: AdminListingItem[] = [];
+
+  const emit = () =>
+    callback(
+      [...housing, ...market].sort((a, b) =>
+        byNewest(a.createdAt, b.createdAt)
+      )
+    );
+
+  unsubscribers.push(
+    onSnapshot(
+      collection(db, "housing_listings"),
+      (snapshot) => {
+        housing = snapshot.docs.map((item) => {
+          const data = item.data() as any;
+
+          return {
+            id: item.id,
+            listingType: "housing",
+            title: data.title || "Housing listing",
+            price: Number(data.rent || 0),
+            status: data.status || "unknown",
+            postedBy: data.postedBy || "",
+            roomType: data.roomType || "",
+            createdAt: data.createdAt,
+          };
+        });
+
+        emit();
+      },
+      (error) => {
+        console.error("subscribe housing admin listings failed", error);
+        housing = [];
+        emit();
+      }
+    )
+  );
+
+  unsubscribers.push(
+    onSnapshot(
+      collection(db, "marketplace_listings"),
+      (snapshot) => {
+        market = snapshot.docs.map((item) => {
+          const data = item.data() as any;
+
+          return {
+            id: item.id,
+            listingType: "market",
+            title: data.title || "Marketplace listing",
+            price: Number(data.price || 0),
+            status: data.status || "unknown",
+            postedBy: data.postedBy || "",
+            category: data.category || "",
+            createdAt: data.createdAt,
+          };
+        });
+
+        emit();
+      },
+      (error) => {
+        console.error("subscribe market admin listings failed", error);
+        market = [];
+        emit();
+      }
+    )
+  );
+
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 
 export async function createAdminSpace(input: CreateAdminSpaceInput) {
@@ -278,6 +405,44 @@ export async function updateSpaceStatus(
 ) {
   await updateDoc(doc(db, "spaces", spaceId), {
     status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function hideListing(listing: AdminListingItem) {
+  const collectionName =
+    listing.listingType === "housing"
+      ? "housing_listings"
+      : "marketplace_listings";
+
+  await updateDoc(doc(db, collectionName, listing.id), {
+    status: "deleted",
+    deletedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function closeListing(listing: AdminListingItem) {
+  const collectionName =
+    listing.listingType === "housing"
+      ? "housing_listings"
+      : "marketplace_listings";
+
+  await updateDoc(doc(db, collectionName, listing.id), {
+    status: "closed",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function markReportReviewed(
+  reportId: string,
+  reviewedBy: string,
+  status: "reviewed" | "dismissed" | "action_taken"
+) {
+  await updateDoc(doc(db, "listing_reports", reportId), {
+    status,
+    reviewedBy,
+    reviewedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }
