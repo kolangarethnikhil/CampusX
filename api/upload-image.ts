@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "node:crypto";
-import { getListingBucketName, getSupabaseAdmin } from "./lib/supabaseAdmin";
-import { verifyBearerToken } from "./lib/firebaseAdmin";
+import { getListingBucketName, getSupabaseAdmin } from "./lib/supabaseAdmin.js";
+import { verifyBearerToken } from "./lib/firebaseAdmin.js";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
