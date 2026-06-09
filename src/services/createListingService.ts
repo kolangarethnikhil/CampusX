@@ -37,10 +37,14 @@ export type MarketCategory =
 
 export type MarketCondition = "New" | "Like New" | "Good" | "Fair";
 
-export interface CreateHousingInput {
-  type: "housing";
+interface BaseCreateInput {
   title: string;
   description: string;
+  photos?: string[];
+}
+
+export interface CreateHousingInput extends BaseCreateInput {
+  type: "housing";
   rent: number;
   deposit: number;
   maintenance?: number;
@@ -51,10 +55,8 @@ export interface CreateHousingInput {
   restrictions?: string;
 }
 
-export interface CreateMarketInput {
+export interface CreateMarketInput extends BaseCreateInput {
   type: "market";
-  title: string;
-  description: string;
   price: number;
   category: MarketCategory;
   condition: MarketCondition;
@@ -104,6 +106,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
 
   const title = input.title.trim();
   const description = input.description.trim();
+  const photos = input.photos || [];
 
   validateBase(title, description);
 
@@ -137,7 +140,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
       longitude: KJU_LOCATION.lng,
       formattedAddress: KJU_ADDRESS,
 
-      photos: [],
+      photos,
       postedBy: user.uid,
       status: "available",
 
@@ -146,7 +149,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
 
       photoCleanupDueAt: null,
       photosDeletedAt: null,
-      photosRetained: true,
+      photosRetained: photos.length > 0,
 
       viewsCount: 0,
       uniqueViewersCount: 0,
@@ -179,7 +182,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
     longitude: KJU_LOCATION.lng,
     formattedAddress: KJU_ADDRESS,
 
-    photos: [],
+    photos,
     postedBy: user.uid,
     status: "available",
 
@@ -188,7 +191,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
 
     photoCleanupDueAt: null,
     photosDeletedAt: null,
-    photosRetained: true,
+    photosRetained: photos.length > 0,
 
     viewsCount: 0,
     uniqueViewersCount: 0,

@@ -1,5 +1,5 @@
-import { X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import AppIcon from "../components/AppIcon";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -16,6 +16,7 @@ import {
   type MarketCategory,
   type MarketCondition,
 } from "../services/createListingService";
+import { uploadImage } from "../services/imageUploadService";
 
 type CreateFlowType = CreateListingType | "board";
 
@@ -26,6 +27,14 @@ interface CreateListingSheetProps {
   onClose: () => void;
   onCreated?: (listingId: string, type: CreateFlowType) => void;
 }
+
+interface LocalImage {
+  id: string;
+  file: File;
+  previewUrl: string;
+}
+
+const MAX_IMAGES = 5;
 
 const roomTypes: HousingRoomType[] = [
   "roommate",
@@ -133,8 +142,11 @@ export default function CreateListingSheet({
   const [location, setLocation] = useState("KJU Campus");
   const [tags, setTags] = useState("");
 
+  const [images, setImages] = useState<LocalImage[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { user, signIn } = useAuth();
 
@@ -143,6 +155,56 @@ export default function CreateListingSheet({
     if (type === "market") return "Selling price";
     return "Amount (optional)";
   }, [type]);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+
+    setError("");
+
+    const incoming = Array.from(files);
+
+    const availableSlots = MAX_IMAGES - images.length;
+
+    if (availableSlots <= 0) {
+      setError(`You can upload up to ${MAX_IMAGES} images.`);
+      return;
+    }
+
+    const nextFiles = incoming.slice(0, availableSlots).map((file) => ({
+      id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setImages((current) => [...current, ...nextFiles]);
+  };
+
+  const removeImage = (id: string) => {
+    setImages((current) => {
+      const target = current.find((item) => item.id === id);
+
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
+  const uploadImages = async () => {
+    if (type === "board") return [];
+
+    const folder = type === "housing" ? "housing" : "marketplace";
+
+    const uploaded = [];
+
+    for (const image of images) {
+      const result = await uploadImage(image.file, folder);
+      uploaded.push(result.publicUrl);
+    }
+
+    return uploaded;
+  };
 
   const submit = async () => {
     setError("");
@@ -155,6 +217,8 @@ export default function CreateListingSheet({
     setBusy(true);
 
     try {
+      const photoUrls = await uploadImages();
+
       let id = "";
 
       if (type === "housing") {
@@ -169,6 +233,7 @@ export default function CreateListingSheet({
           furnishing,
           preferTenants,
           availableFrom,
+          photos: photoUrls,
         });
       } else if (type === "market") {
         id = await createListing({
@@ -179,6 +244,7 @@ export default function CreateListingSheet({
           category: marketCategory,
           condition,
           isNegotiable,
+          photos: photoUrls,
         });
       } else {
         const boardId = boardNameToId(boardName || "general");
@@ -196,6 +262,8 @@ export default function CreateListingSheet({
             .filter(Boolean),
         });
       }
+
+      images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
 
       onCreated?.(id, type);
       onClose();
@@ -255,6 +323,62 @@ export default function CreateListingSheet({
               onClick={() => setType("market")}
               tone="pink"
             />
+          </div>
+        )}
+
+        {type !== "board" && (
+          <div className="mb-4">
+            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+              Photos
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              {images.map((image) => (
+                <div
+                  key={image.id}
+                  className="relative h-24 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03]"
+                >
+                  <img
+                    src={image.previewUrl}
+                    alt="Preview"
+                    className="h-full w-full object-cover"
+                  />
+
+                  <button
+                    onClick={() => removeImage(image.id)}
+                    className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+
+              {images.length < MAX_IMAGES && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-24 rounded-2xl border border-dashed border-white/[0.14] bg-white/[0.025] flex flex-col items-center justify-center text-cx-text-muted"
+                >
+                  <ImagePlus size={20} />
+                  <span className="mt-1 text-[9px]">Add</span>
+                </button>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                handleFiles(event.target.files);
+                event.target.value = "";
+              }}
+            />
+
+            <p className="mt-2 text-[9px] text-cx-text-muted">
+              Up to {MAX_IMAGES} images. JPG, PNG or WEBP.
+            </p>
           </div>
         )}
 
@@ -430,8 +554,8 @@ export default function CreateListingSheet({
 
         <div className="mt-4 rounded-2xl border border-cx-amber/15 bg-cx-amber/[0.035] p-3">
           <p className="text-[10px] text-cx-text-muted leading-relaxed">
-            Location currently defaults to KJU for housing/essentials. Next pass
-            adds map picker and Supabase image upload.
+            Images upload to Supabase. Location currently defaults to KJU; map
+            picker comes next.
           </p>
         </div>
 
@@ -442,7 +566,13 @@ export default function CreateListingSheet({
           disabled={busy}
           className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold tracking-wide text-black disabled:opacity-50"
         >
-          {busy ? "Posting..." : user ? "Post on CampusX" : "Sign in to post"}
+          {busy
+            ? images.length > 0
+              ? "Uploading..."
+              : "Posting..."
+            : user
+              ? "Post on CampusX"
+              : "Sign in to post"}
         </button>
       </div>
     </div>
