@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   EyeOff,
+  PenLine,
   Plus,
   ShieldCheck,
   X,
@@ -13,24 +14,25 @@ import {
   approveModeratorRequest,
   approveSpaceRequest,
   closeListing,
-   reopenListing,
-  unhideListing,
   createAdminSpace,
   hideListing,
   markReportReviewed,
   rejectModeratorRequest,
   rejectSpaceRequest,
+  reopenListing,
   subscribeAdminListings,
   subscribeAdminModeratorRequests,
   subscribeAdminReports,
   subscribeAdminSpaceRequests,
   subscribeAdminSpaces,
+  unhideListing,
+  updateAdminSpace,
   updateSpaceStatus,
   type AdminListingItem,
   type AdminListingReport,
 } from "../services/adminService";
 import type { ModeratorRequest, SpaceRequest } from "../types/moderation";
-import type { CampusSpace, SpaceCategory } from "../types/space";
+import type { CampusSpace, SpaceCategory, SpaceStatus } from "../types/space";
 
 type AdminTab = "spaces" | "spaceRequests" | "moderators" | "reports" | "listings";
 
@@ -44,6 +46,8 @@ const categories: SpaceCategory[] = [
   "marketplace",
   "general",
 ];
+
+const statuses: SpaceStatus[] = ["active", "hidden", "archived"];
 
 const accents = [
   "#8b5cf6",
@@ -77,7 +81,9 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
   const [reports, setReports] = useState<AdminListingReport[]>([]);
   const [listings, setListings] = useState<AdminListingItem[]>([]);
   const [status, setStatus] = useState("");
+  const [busyAction, setBusyAction] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingSpace, setEditingSpace] = useState<CampusSpace | null>(null);
 
   const { user, isAdmin, refreshClaims } = useAuth();
 
@@ -104,8 +110,13 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
     };
   }, [isAdmin]);
 
-  const run = async (task: () => Promise<unknown>, success: string) => {
+  const run = async (
+    task: () => Promise<unknown>,
+    success: string,
+    actionId = ""
+  ) => {
     setStatus("");
+    setBusyAction(actionId);
 
     try {
       await task();
@@ -113,6 +124,8 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
     } catch (error) {
       console.error(error);
       setStatus(error instanceof Error ? error.message : "Admin action failed.");
+    } finally {
+      setBusyAction("");
     }
   };
 
@@ -149,8 +162,7 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
             </p>
 
             <p className="text-[11px] text-cx-text-muted mt-2 leading-relaxed">
-              Run the admin claim script for your Firebase UID, then sign out
-              and sign in again.
+              Run the admin claim script, sign out and sign in again.
             </p>
           </div>
         </div>
@@ -232,49 +244,84 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
             {spaces.length === 0 ? (
               <EmptyAdminState title="No spaces yet" />
             ) : (
-              spaces.map((space) => (
-                <div
-                  key={space.id}
-                  className="glass-elevated rounded-[22px] p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-12 h-12 rounded-2xl glass flex items-center justify-center overflow-hidden"
-                      style={{ background: `${space.accent}12` }}
-                    >
-                      <AppIcon
-                        name={(space.icon || "networking") as AppIconName}
-                        size={38}
-                      />
+              spaces.map((space) => {
+                const isHidden =
+                  space.status === "hidden" || space.status === "archived";
+
+                return (
+                  <div
+                    key={space.id}
+                    className="glass-elevated rounded-[22px] p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-12 h-12 rounded-2xl glass flex items-center justify-center overflow-hidden"
+                        style={{ background: `${space.accent}12` }}
+                      >
+                        <AppIcon
+                          name={(space.icon || "networking") as AppIconName}
+                          size={38}
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[14px] font-semibold text-cx-text truncate">
+                            {space.name}
+                          </p>
+                          <StatusPill status={space.status} />
+                        </div>
+
+                        <p className="text-[10px] text-cx-text-muted truncate">
+                          {space.category} · {space.memberCount || 0} members
+                        </p>
+
+                        <p className="text-[10px] text-cx-text-muted truncate mt-0.5">
+                          {space.description}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-cx-text truncate">
-                        {space.name}
-                      </p>
-                      <p className="text-[10px] text-cx-text-muted truncate">
-                        {space.status} · {space.memberCount || 0} members
-                      </p>
-                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      <button
+                        onClick={() => setEditingSpace(space)}
+                        className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary flex items-center justify-center gap-1.5"
+                      >
+                        <PenLine size={13} /> Edit
+                      </button>
 
-                    <button
-                      onClick={() =>
-                        run(
-                          () =>
-                            updateSpaceStatus(
-                              space.id,
-                              space.status === "active" ? "hidden" : "active"
-                            ),
-                          "Space status updated."
-                        )
-                      }
-                      className="w-9 h-9 rounded-full glass flex items-center justify-center"
-                    >
-                      <EyeOff size={15} className="text-cx-text-secondary" />
-                    </button>
+                      <button
+                        disabled={busyAction === `space-${space.id}`}
+                        onClick={() =>
+                          run(
+                            () =>
+                              updateSpaceStatus(
+                                space.id,
+                                isHidden ? "active" : "hidden"
+                              ),
+                            isHidden
+                              ? "Space is visible again."
+                              : "Space hidden.",
+                            `space-${space.id}`
+                          )
+                        }
+                        className={`rounded-2xl py-3 text-[11px] font-semibold flex items-center justify-center gap-1.5 ${
+                          isHidden
+                            ? "bg-white text-black"
+                            : "border border-red-500/15 bg-red-500/[0.04] text-red-400"
+                        }`}
+                      >
+                        <EyeOff size={13} />
+                        {busyAction === `space-${space.id}`
+                          ? "Saving..."
+                          : isHidden
+                            ? "Unhide"
+                            : "Hide"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -312,134 +359,98 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
           </div>
         )}
 
-        {tab === "listings" && (
-  <div className="space-y-3">
-    {listings.length === 0 ? (
-      <EmptyAdminState title="No listings found" />
-    ) : (
-      listings.map((listing) => {
-        const isHidden =
-          listing.status === "deleted" || listing.status === "hidden";
-        const isClosed = listing.status === "closed";
-
-        return (
-          <div
-            key={`${listing.listingType}-${listing.id}`}
-            className="glass-elevated rounded-[22px] p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[14px] font-semibold text-cx-text truncate">
-                  {listing.title}
-                </p>
-
-                <p className="text-[10px] text-cx-text-muted mt-1">
-                  {listing.listingType} · ₹
-                  {Number(listing.price || 0).toLocaleString("en-IN")}
-                </p>
-              </div>
-
-              <span
-                className={`text-[9px] px-2 py-1 rounded-full uppercase ${
-                  isHidden
-                    ? "bg-red-500/[0.08] text-red-400"
-                    : isClosed
-                      ? "bg-cx-amber/[0.08] text-cx-amber"
-                      : "bg-cx-lime/[0.08] text-cx-lime"
-                }`}
-              >
-                {isHidden ? "hidden" : listing.status}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {isHidden ? (
-                <button
-                  onClick={() =>
-                    run(() => unhideListing(listing), "Listing is visible again.")
-                  }
-                  className="col-span-2 rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
-                >
-                  Unhide listing
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() =>
-                      run(
-                        () =>
-                          isClosed
-                            ? reopenListing(listing)
-                            : closeListing(listing),
-                        isClosed ? "Listing reopened." : "Listing closed."
-                      )
-                    }
-                    className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
-                  >
-                    {isClosed ? "Reopen" : "Close"}
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      run(() => hideListing(listing), "Listing hidden.")
-                    }
-                    className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400"
-                  >
-                    Hide
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })
-    )}
-  </div>
-)}
-
-        {tab === "listings" && (
+        {tab === "moderators" && (
           <div className="space-y-3">
-            {listings.length === 0 ? (
-              <EmptyAdminState title="No listings found" />
+            {moderatorRequests.length === 0 ? (
+              <EmptyAdminState title="No pending moderator requests" />
             ) : (
-              listings.map((listing) => (
+              moderatorRequests.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  title="Moderator request"
+                  subtitle={`${request.spaceId} · ${
+                    request.requestedByName || "CampusX user"
+                  }`}
+                  description={request.reason}
+                  onApprove={() =>
+                    user &&
+                    run(
+                      () => approveModeratorRequest(request, user.uid),
+                      "Moderator approved."
+                    )
+                  }
+                  onReject={() =>
+                    user &&
+                    run(
+                      () => rejectModeratorRequest(request.id, user.uid),
+                      "Moderator request rejected."
+                    )
+                  }
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "reports" && (
+          <div className="space-y-3">
+            {reports.length === 0 ? (
+              <EmptyAdminState title="No open reports" />
+            ) : (
+              reports.map((report) => (
                 <div
-                  key={`${listing.listingType}-${listing.id}`}
+                  key={report.id}
                   className="glass-elevated rounded-[22px] p-4"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-semibold text-cx-text truncate">
-                        {listing.title}
-                      </p>
-                      <p className="text-[10px] text-cx-text-muted mt-1">
-                        {listing.listingType} · {listing.status} · ₹
-                        {Number(listing.price || 0).toLocaleString("en-IN")}
-                      </p>
-                    </div>
+                  <p className="text-[14px] font-semibold text-cx-text">
+                    {report.listingTitle || "Reported listing"}
+                  </p>
 
-                    <span className="text-[9px] px-2 py-1 rounded-full bg-white/[0.04] text-cx-text-muted uppercase">
-                      {listing.category || listing.roomType || "post"}
-                    </span>
-                  </div>
+                  <p className="text-[10px] text-cx-text-muted mt-1">
+                    {report.listingType} · {report.reason}
+                  </p>
+
+                  {report.details && (
+                    <p className="text-[12px] text-cx-text-secondary leading-relaxed mt-3">
+                      {report.details}
+                    </p>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2 mt-4">
                     <button
                       onClick={() =>
-                        run(() => closeListing(listing), "Listing closed.")
+                        user &&
+                        run(
+                          () =>
+                            markReportReviewed(
+                              report.id,
+                              user.uid,
+                              "dismissed"
+                            ),
+                          "Report dismissed."
+                        )
                       }
                       className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
                     >
-                      Close
+                      Dismiss
                     </button>
 
                     <button
                       onClick={() =>
-                        run(() => hideListing(listing), "Listing hidden.")
+                        user &&
+                        run(
+                          () =>
+                            markReportReviewed(
+                              report.id,
+                              user.uid,
+                              "action_taken"
+                            ),
+                          "Report marked action taken."
+                        )
                       }
-                      className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400"
+                      className="rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
                     >
-                      Hide
+                      Action taken
                     </button>
                   </div>
                 </div>
@@ -447,19 +458,143 @@ export default function AdminPanelScreen({ onBack }: AdminPanelScreenProps) {
             )}
           </div>
         )}
+
+        {tab === "listings" && (
+          <div className="space-y-3">
+            {listings.length === 0 ? (
+              <EmptyAdminState title="No listings found" />
+            ) : (
+              listings.map((listing) => {
+                const isHidden =
+                  listing.status === "deleted" || listing.status === "hidden";
+                const isClosed = listing.status === "closed";
+
+                return (
+                  <div
+                    key={`${listing.listingType}-${listing.id}`}
+                    className="glass-elevated rounded-[22px] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-semibold text-cx-text truncate">
+                          {listing.title}
+                        </p>
+
+                        <p className="text-[10px] text-cx-text-muted mt-1">
+                          {listing.listingType} · ₹
+                          {Number(listing.price || 0).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`text-[9px] px-2 py-1 rounded-full uppercase ${
+                          isHidden
+                            ? "bg-red-500/[0.08] text-red-400"
+                            : isClosed
+                              ? "bg-cx-amber/[0.08] text-cx-amber"
+                              : "bg-cx-lime/[0.08] text-cx-lime"
+                        }`}
+                      >
+                        {isHidden ? "hidden" : listing.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      {isHidden ? (
+                        <button
+                          onClick={() =>
+                            run(
+                              () => unhideListing(listing),
+                              "Listing is visible again."
+                            )
+                          }
+                          className="col-span-2 rounded-2xl bg-white py-3 text-[11px] font-semibold text-black"
+                        >
+                          Unhide listing
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() =>
+                              run(
+                                () =>
+                                  isClosed
+                                    ? reopenListing(listing)
+                                    : closeListing(listing),
+                                isClosed
+                                  ? "Listing reopened."
+                                  : "Listing closed."
+                              )
+                            }
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] py-3 text-[11px] font-semibold text-cx-text-secondary"
+                          >
+                            {isClosed ? "Reopen" : "Close"}
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              run(() => hideListing(listing), "Listing hidden.")
+                            }
+                            className="rounded-2xl border border-red-500/15 bg-red-500/[0.04] py-3 text-[11px] font-semibold text-red-400"
+                          >
+                            Hide
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {createOpen && (
-        <CreateSpaceSheet
+        <SpaceEditorSheet
+          mode="create"
           onClose={() => setCreateOpen(false)}
-          onCreate={(input) =>
+          onSubmit={(input) =>
             run(() => createAdminSpace(input), "Space created.").then(() =>
               setCreateOpen(false)
             )
           }
         />
       )}
+
+      {editingSpace && (
+        <SpaceEditorSheet
+          mode="edit"
+          space={editingSpace}
+          onClose={() => setEditingSpace(null)}
+          onSubmit={(input) =>
+            run(
+              () =>
+                updateAdminSpace({
+                  ...input,
+                  id: editingSpace.id,
+                }),
+              "Space updated."
+            ).then(() => setEditingSpace(null))
+          }
+        />
+      )}
     </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const className =
+    status === "active"
+      ? "bg-cx-lime/[0.08] text-cx-lime"
+      : status === "hidden"
+        ? "bg-red-500/[0.08] text-red-400"
+        : "bg-cx-amber/[0.08] text-cx-amber";
+
+  return (
+    <span className={`text-[8px] px-2 py-0.5 rounded-full uppercase ${className}`}>
+      {status}
+    </span>
   );
 }
 
@@ -534,24 +669,70 @@ function RequestCard({
   );
 }
 
-function CreateSpaceSheet({
+function SpaceEditorSheet({
+  mode,
+  space,
   onClose,
-  onCreate,
+  onSubmit,
 }: {
+  mode: "create" | "edit";
+  space?: CampusSpace;
   onClose: () => void;
-  onCreate: (input: {
+  onSubmit: (input: {
     name: string;
     description: string;
     category: SpaceCategory;
     icon: string;
     accent: string;
+    status: SpaceStatus;
   }) => Promise<void> | void;
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<SpaceCategory>("general");
-  const [icon, setIcon] = useState<AppIconName>("networking");
-  const [accent, setAccent] = useState("#8b5cf6");
+  const [name, setName] = useState(space?.name || "");
+  const [description, setDescription] = useState(space?.description || "");
+  const [category, setCategory] = useState<SpaceCategory>(
+    space?.category || "general"
+  );
+  const [icon, setIcon] = useState<AppIconName>(
+    (space?.icon as AppIconName) || "networking"
+  );
+  const [accent, setAccent] = useState(space?.accent || "#8b5cf6");
+  const [spaceStatus, setSpaceStatus] = useState<SpaceStatus>(
+    space?.status || "active"
+  );
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setError("");
+
+    if (name.trim().length < 3) {
+      setError("Space name must be at least 3 characters.");
+      return;
+    }
+
+    if (description.trim().length < 10) {
+      setError("Description must be at least 10 characters.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onSubmit({
+        name,
+        description,
+        category,
+        icon,
+        accent,
+        status: spaceStatus,
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Could not save space.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="absolute inset-0 z-[100] bg-black/70 flex items-end animate-fade-in">
@@ -561,11 +742,11 @@ function CreateSpaceSheet({
         <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
 
         <h3 className="text-[21px] font-semibold text-cx-text tracking-[-0.04em]">
-          Create space
+          {mode === "create" ? "Create space" : "Edit space"}
         </h3>
 
         <p className="text-[11px] text-cx-text-muted mt-1 mb-5">
-          Admin-created official campus room.
+          Official campus room controlled by admins.
         </p>
 
         <div className="space-y-3">
@@ -583,27 +764,19 @@ function CreateSpaceSheet({
             className="w-full min-h-[90px] input-premium rounded-2xl px-4 py-3 text-[13px] text-cx-text placeholder:text-cx-text-muted resize-none"
           />
 
-          <div>
-            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
-              Category
-            </p>
+          <OptionGrid
+            label="Category"
+            value={category}
+            options={categories}
+            onChange={(value) => setCategory(value as SpaceCategory)}
+          />
 
-            <div className="grid grid-cols-2 gap-2">
-              {categories.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setCategory(item)}
-                  className={`rounded-xl px-3 py-2 text-[10px] border ${
-                    category === item
-                      ? "bg-cx-purple text-white border-cx-purple"
-                      : "border-white/[0.06] text-cx-text-muted"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
+          <OptionGrid
+            label="Status"
+            value={spaceStatus}
+            options={statuses}
+            onChange={(value) => setSpaceStatus(value as SpaceStatus)}
+          />
 
           <div>
             <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
@@ -647,20 +820,59 @@ function CreateSpaceSheet({
           </div>
         </div>
 
+        {error && (
+          <p className="mt-4 rounded-2xl border border-red-500/15 bg-red-500/[0.05] px-4 py-3 text-[11px] text-red-400">
+            {error}
+          </p>
+        )}
+
         <button
-          onClick={() =>
-            onCreate({
-              name,
-              description,
-              category,
-              icon,
-              accent,
-            })
-          }
-          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black"
+          onClick={submit}
+          disabled={busy}
+          className="w-full mt-5 rounded-2xl bg-white py-3.5 text-[11px] font-semibold text-black disabled:opacity-50"
         >
-          Create official space
+          {busy
+            ? "Saving..."
+            : mode === "create"
+              ? "Create official space"
+              : "Save changes"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function OptionGrid({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+        {label}
+      </p>
+
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option) => (
+          <button
+            key={option}
+            onClick={() => onChange(option)}
+            className={`rounded-xl px-3 py-2 text-[10px] border ${
+              value === option
+                ? "bg-cx-purple text-white border-cx-purple"
+                : "border-white/[0.06] text-cx-text-muted"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
       </div>
     </div>
   );

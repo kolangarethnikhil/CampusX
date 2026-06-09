@@ -11,7 +11,7 @@ import {
 import { CAMPUS_ID } from "../constants/campus";
 import { db } from "../lib/firebase";
 import type { ModeratorRequest, SpaceRequest } from "../types/moderation";
-import type { CampusSpace, SpaceCategory } from "../types/space";
+import type { CampusSpace, SpaceCategory, SpaceStatus } from "../types/space";
 
 export interface CreateAdminSpaceInput {
   name: string;
@@ -19,6 +19,11 @@ export interface CreateAdminSpaceInput {
   category: SpaceCategory;
   icon: string;
   accent: string;
+}
+
+export interface UpdateAdminSpaceInput extends CreateAdminSpaceInput {
+  id: string;
+  status: SpaceStatus;
 }
 
 export interface AdminListingReport {
@@ -52,6 +57,27 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function validateSpace(input: CreateAdminSpaceInput) {
+  const name = input.name.trim();
+  const description = input.description.trim();
+
+  if (name.length < 3) {
+    throw new Error("Space name must be at least 3 characters.");
+  }
+
+  if (name.length > 60) {
+    throw new Error("Space name is too long.");
+  }
+
+  if (description.length < 10) {
+    throw new Error("Description must be at least 10 characters.");
+  }
+
+  if (description.length > 500) {
+    throw new Error("Description is too long.");
+  }
 }
 
 function normalizeSpaceRequest(
@@ -259,14 +285,12 @@ export function subscribeAdminListings(
 }
 
 export async function createAdminSpace(input: CreateAdminSpaceInput) {
+  validateSpace(input);
+
   const id = slugify(input.name);
 
   if (!id) {
     throw new Error("Enter a valid space name.");
-  }
-
-  if (input.description.trim().length < 10) {
-    throw new Error("Description is too short.");
   }
 
   await setDoc(
@@ -297,6 +321,24 @@ export async function createAdminSpace(input: CreateAdminSpaceInput) {
   );
 
   return id;
+}
+
+export async function updateAdminSpace(input: UpdateAdminSpaceInput) {
+  validateSpace(input);
+
+  if (!input.id) {
+    throw new Error("Space ID is missing.");
+  }
+
+  await updateDoc(doc(db, "spaces", input.id), {
+    name: input.name.trim(),
+    description: input.description.trim(),
+    category: input.category,
+    icon: input.icon,
+    accent: input.accent,
+    status: input.status,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function approveSpaceRequest(
@@ -416,9 +458,7 @@ function getListingCollectionName(listing: AdminListingItem) {
 }
 
 export async function hideListing(listing: AdminListingItem) {
-  const collectionName = getListingCollectionName(listing);
-
-  await updateDoc(doc(db, collectionName, listing.id), {
+  await updateDoc(doc(db, getListingCollectionName(listing), listing.id), {
     status: "deleted",
     deletedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -426,9 +466,7 @@ export async function hideListing(listing: AdminListingItem) {
 }
 
 export async function unhideListing(listing: AdminListingItem) {
-  const collectionName = getListingCollectionName(listing);
-
-  await updateDoc(doc(db, collectionName, listing.id), {
+  await updateDoc(doc(db, getListingCollectionName(listing), listing.id), {
     status: "available",
     deletedAt: null,
     updatedAt: serverTimestamp(),
@@ -436,18 +474,14 @@ export async function unhideListing(listing: AdminListingItem) {
 }
 
 export async function closeListing(listing: AdminListingItem) {
-  const collectionName = getListingCollectionName(listing);
-
-  await updateDoc(doc(db, collectionName, listing.id), {
+  await updateDoc(doc(db, getListingCollectionName(listing), listing.id), {
     status: "closed",
     updatedAt: serverTimestamp(),
   });
 }
 
 export async function reopenListing(listing: AdminListingItem) {
-  const collectionName = getListingCollectionName(listing);
-
-  await updateDoc(doc(db, collectionName, listing.id), {
+  await updateDoc(doc(db, getListingCollectionName(listing), listing.id), {
     status: "available",
     updatedAt: serverTimestamp(),
   });
