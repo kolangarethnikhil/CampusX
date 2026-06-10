@@ -1,6 +1,7 @@
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, Loader2, MapPin, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import AppIcon from "../components/AppIcon";
+import LocationSelector from "../components/LocationSelector";
 import { useAuth } from "../contexts/AuthContext";
 import {
   boardIdToType,
@@ -17,6 +18,10 @@ import {
   type MarketCondition,
 } from "../services/createListingService";
 import { uploadImage } from "../services/imageUploadService";
+import {
+  getRouteDistanceFromKju,
+  type RouteDistance,
+} from "../utils/location";
 
 type CreateFlowType = CreateListingType | "board";
 
@@ -142,6 +147,18 @@ export default function CreateListingSheet({
   const [location, setLocation] = useState("KJU Campus");
   const [tags, setTags] = useState("");
 
+  const [selectedLocation, setSelectedLocation] = useState<{
+    address: string;
+    lat: number;
+    lng: number;
+    googleMapsUrl?: string;
+  } | null>(null);
+
+  const [routeDistance, setRouteDistance] = useState<RouteDistance | null>(
+    null
+  );
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
   const [images, setImages] = useState<LocalImage[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -156,13 +173,47 @@ export default function CreateListingSheet({
     return "Amount (optional)";
   }, [type]);
 
+  const handleClose = () => {
+    images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    onClose();
+  };
+
+  const handleLocationSelect = async (locationValue: {
+    address: string;
+    lat: number;
+    lng: number;
+    googleMapsUrl?: string;
+  }) => {
+    setSelectedLocation(locationValue);
+    setRouteDistance(null);
+    setError("");
+    setIsCalculatingDistance(true);
+
+    try {
+      const route = await getRouteDistanceFromKju({
+        lat: locationValue.lat,
+        lng: locationValue.lng,
+      });
+
+      setRouteDistance(route);
+    } catch (error) {
+      console.error("Distance calculation failed:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Could not calculate distance from KJU."
+      );
+    } finally {
+      setIsCalculatingDistance(false);
+    }
+  };
+
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
 
     setError("");
 
     const incoming = Array.from(files);
-
     const availableSlots = MAX_IMAGES - images.length;
 
     if (availableSlots <= 0) {
@@ -195,8 +246,7 @@ export default function CreateListingSheet({
     if (type === "board") return [];
 
     const folder = type === "housing" ? "housing" : "marketplace";
-
-    const uploaded = [];
+    const uploaded: string[] = [];
 
     for (const image of images) {
       const result = await uploadImage(image.file, folder);
@@ -204,6 +254,35 @@ export default function CreateListingSheet({
     }
 
     return uploaded;
+  };
+
+  const getLocationPayload = () => {
+    if (!selectedLocation) return null;
+
+    return {
+      ...selectedLocation,
+      travelDistanceMeters: routeDistance?.travelDistanceMeters,
+      travelDistanceLabel: routeDistance?.travelDistanceLabel,
+      travelDurationLabel: routeDistance?.travelDurationLabel,
+    };
+  };
+
+  const validateBeforeSubmit = () => {
+    if (type === "housing" && !selectedLocation) {
+      throw new Error("Please select the room location.");
+    }
+
+    if (type === "housing" && isCalculatingDistance) {
+      throw new Error("Please wait for KJU distance calculation.");
+    }
+
+    if (type === "housing" && selectedLocation && !routeDistance) {
+      throw new Error("Please select a valid location with KJU distance.");
+    }
+
+    if (type === "market" && !selectedLocation) {
+      throw new Error("Please select the pickup location.");
+    }
   };
 
   const submit = async () => {
@@ -217,7 +296,10 @@ export default function CreateListingSheet({
     setBusy(true);
 
     try {
+      validateBeforeSubmit();
+
       const photoUrls = await uploadImages();
+      const locationPayload = getLocationPayload();
 
       let id = "";
 
@@ -234,6 +316,7 @@ export default function CreateListingSheet({
           preferTenants,
           availableFrom,
           photos: photoUrls,
+          location: locationPayload,
         });
       } else if (type === "market") {
         id = await createListing({
@@ -245,6 +328,7 @@ export default function CreateListingSheet({
           condition,
           isNegotiable,
           photos: photoUrls,
+          location: locationPayload,
         });
       } else {
         const boardId = boardNameToId(boardName || "general");
@@ -276,7 +360,7 @@ export default function CreateListingSheet({
 
   return (
     <div className="absolute inset-0 z-[90] bg-black/70 flex items-end animate-fade-in">
-      <button className="absolute inset-0" onClick={onClose} />
+      <button className="absolute inset-0" onClick={handleClose} />
 
       <div className="relative w-full rounded-t-[30px] bg-cx-card-elevated border-t border-white/[0.08] p-5 animate-slide-up max-h-[86%] overflow-y-auto">
         <div className="w-12 h-1 rounded-full bg-white/15 mx-auto mb-5" />
@@ -297,7 +381,7 @@ export default function CreateListingSheet({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-10 h-10 rounded-full glass flex items-center justify-center"
           >
             <X size={17} className="text-cx-text-secondary" />
@@ -379,6 +463,59 @@ export default function CreateListingSheet({
             <p className="mt-2 text-[9px] text-cx-text-muted">
               Up to {MAX_IMAGES} images. JPG, PNG or WEBP.
             </p>
+          </div>
+        )}
+
+        {type !== "board" && (
+          <div className="mb-4">
+            <p className="text-[10px] text-cx-text-muted mb-2 uppercase tracking-wider">
+              Location
+            </p>
+
+            <LocationSelector onLocationSelect={handleLocationSelect} />
+
+            <div className="mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3">
+              {isCalculatingDistance ? (
+                <div className="flex items-center gap-2 text-[11px] text-cx-text-muted">
+                  <Loader2 size={13} className="animate-spin" />
+                  Calculating distance from KJU...
+                </div>
+              ) : routeDistance ? (
+                <div className="flex items-start gap-2">
+                  <MapPin
+                    size={14}
+                    className="mt-0.5 text-cx-purple-bright"
+                  />
+                  <div>
+                    <p className="text-[12px] font-semibold text-cx-text">
+                      {routeDistance.travelDistanceLabel}
+                    </p>
+                    <p className="text-[10px] text-cx-text-muted mt-0.5">
+                      {routeDistance.travelDurationLabel}
+                    </p>
+                  </div>
+                </div>
+              ) : selectedLocation ? (
+                <div className="flex items-start gap-2">
+                  <MapPin
+                    size={14}
+                    className="mt-0.5 text-cx-purple-bright"
+                  />
+                  <div>
+                    <p className="text-[12px] font-semibold text-cx-text">
+                      Location selected
+                    </p>
+                    <p className="text-[10px] text-cx-text-muted mt-0.5">
+                      Distance will appear after calculation.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[10px] text-cx-text-muted">
+                  Select a location to calculate distance from KJU.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -554,8 +691,8 @@ export default function CreateListingSheet({
 
         <div className="mt-4 rounded-2xl border border-cx-amber/15 bg-cx-amber/[0.035] p-3">
           <p className="text-[10px] text-cx-text-muted leading-relaxed">
-            Images upload to Supabase. Location currently defaults to KJU; map
-            picker comes next.
+            Images upload to Supabase. Location and distance are saved with the
+            listing.
           </p>
         </div>
 

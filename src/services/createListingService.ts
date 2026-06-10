@@ -37,10 +37,21 @@ export type MarketCategory =
 
 export type MarketCondition = "New" | "Like New" | "Good" | "Fair";
 
+export interface ListingLocationInput {
+  address: string;
+  lat: number;
+  lng: number;
+  googleMapsUrl?: string;
+  travelDistanceMeters?: number;
+  travelDistanceLabel?: string;
+  travelDurationLabel?: string;
+}
+
 interface BaseCreateInput {
   title: string;
   description: string;
   photos?: string[];
+  location?: ListingLocationInput | null;
 }
 
 export interface CreateHousingInput extends BaseCreateInput {
@@ -101,12 +112,46 @@ function validateBase(title: string, description: string) {
   }
 }
 
+function normalizeLocation(location?: ListingLocationInput | null) {
+  if (!location) {
+    return {
+      latitude: KJU_LOCATION.lat,
+      longitude: KJU_LOCATION.lng,
+      formattedAddress: KJU_ADDRESS,
+      googleMapsUrl: "",
+      distanceFromCollegeKm: 0,
+      distanceLabel: "Near KJU",
+      distance: "Near KJU",
+      travelDistanceMeters: 0,
+      travelDistanceLabel: "Near KJU",
+      travelDurationLabel: "",
+    };
+  }
+
+  const travelDistanceMeters = location.travelDistanceMeters || 0;
+  const travelDistanceLabel = location.travelDistanceLabel || "Near KJU";
+
+  return {
+    latitude: location.lat,
+    longitude: location.lng,
+    formattedAddress: location.address,
+    googleMapsUrl: location.googleMapsUrl || "",
+    distanceFromCollegeKm: travelDistanceMeters / 1000,
+    distanceLabel: travelDistanceLabel,
+    distance: travelDistanceLabel,
+    travelDistanceMeters,
+    travelDistanceLabel,
+    travelDurationLabel: location.travelDurationLabel || "",
+  };
+}
+
 export async function createListing(input: CreateListingInput): Promise<string> {
   const user = requireUser();
 
   const title = input.title.trim();
   const description = input.description.trim();
   const photos = input.photos || [];
+  const locationPayload = normalizeLocation(input.location);
 
   validateBase(title, description);
 
@@ -136,9 +181,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
       availableFrom:
         input.availableFrom || new Date().toISOString().slice(0, 10),
 
-      latitude: KJU_LOCATION.lat,
-      longitude: KJU_LOCATION.lng,
-      formattedAddress: KJU_ADDRESS,
+      ...locationPayload,
 
       photos,
       postedBy: user.uid,
@@ -178,9 +221,7 @@ export async function createListing(input: CreateListingInput): Promise<string> 
     isNegotiable: input.isNegotiable,
     reasonForSelling: input.reasonForSelling?.trim() || "",
 
-    latitude: KJU_LOCATION.lat,
-    longitude: KJU_LOCATION.lng,
-    formattedAddress: KJU_ADDRESS,
+    ...locationPayload,
 
     photos,
     postedBy: user.uid,

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import PhoneFrame from "./components/PhoneFrame";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import HomeScreen from "./screens/HomeScreen";
 import BoardsScreen from "./screens/BoardsScreen";
 import SpacesScreen from "./screens/SpacesScreen";
+import { APIProvider } from "@vis.gl/react-google-maps";
 import RoomChatScreen from "./screens/RoomChatScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import BoardListingsScreen from "./screens/BoardListingsScreen";
@@ -31,7 +32,17 @@ type SubScreen =
   | { type: "listingDetail"; listing: UiListing; boardName: string }
   | { type: "admin" }
   | null;
+function OptionalMapsProvider({ children }: { children: ReactNode }) {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 
+  if (!apiKey) return <>{children}</>;
+
+  return (
+    <APIProvider apiKey={apiKey} version="weekly">
+      {children}
+    </APIProvider>
+  );
+}
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [subScreen, setSubScreen] = useState<SubScreen>(null);
@@ -163,7 +174,8 @@ export default function App() {
 
   const showBottomNav = subScreen === null && !createOpen;
 
-  return (
+return (
+  <OptionalMapsProvider>
     <PhoneFrame>
       {subScreen?.type === "room" ? (
   <RoomChatScreen space={subScreen.space} onBack={handleBack} />
@@ -241,5 +253,6 @@ export default function App() {
 
       {showBottomNav && <BottomNav active={activeTab} onNavigate={handleNavigate} />}
     </PhoneFrame>
+</OptionalMapsProvider>
   );
 }
