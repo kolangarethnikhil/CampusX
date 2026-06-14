@@ -16,8 +16,7 @@ export default function BottomNav({ active, onNavigate }: BottomNavProps) {
   ];
 
   return (
-    <nav className="relative flex items-center justify-around px-3 py-2 pb-3 bg-cx-bg/82 backdrop-blur-2xl border-t border-white/[0.055] shadow-[0_-18px_46px_rgba(0,0,0,0.35)]">
-      <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-cx-purple/30 to-transparent" />
+    <nav className="relative flex items-center justify-around px-3 py-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-cx-bg/82 backdrop-blur-2xl border-t border-white/[0.055] shadow-[0_-18px_46px_rgba(0,0,0,0.35)]">
       {tabs.map((tab) => {
         const isActive = active === tab.id;
 

@@ -6,13 +6,13 @@ interface PhoneFrameProps {
 
 export default function PhoneFrame({ children }: PhoneFrameProps) {
   return (
-    <div className="min-h-[100dvh] bg-[#020203] text-cx-text">
+    <div className="min-h-[100dvh] bg-[#020203] text-cx-text overflow-hidden">
       {/* Real mobile/PWA view */}
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-cx-bg md:hidden">
+      <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-cx-bg md:hidden">
         {children}
       </div>
 
-      {/* Desktop preview frame */}
+      {/* Desktop/laptop preview frame */}
       <div className="relative hidden min-h-screen items-center justify-center overflow-hidden bg-[#020203] p-6 md:flex">
         <div className="absolute top-1/4 left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-cx-purple/[0.03] blur-[120px] pointer-events-none" />
         <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] rounded-full bg-cx-green/[0.02] blur-[100px] pointer-events-none" />
