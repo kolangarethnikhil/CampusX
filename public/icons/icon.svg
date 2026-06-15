@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#050509"/>
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#paint0_radial)"/>
+  <path d="M128 174C128 151.909 145.909 134 168 134H344C366.091 134 384 151.909 384 174V338C384 360.091 366.091 378 344 378H168C145.909 378 128 360.091 128 338V174Z" fill="#11111A" stroke="rgba(255,255,255,0.12)" stroke-width="8"/>
+  <path d="M176 236L256 172L336 236V348H288V280H224V348H176V236Z" fill="#8B5CF6"/>
+  <path d="M256 172L336 236V348H288V280H256V172Z" fill="#F472B6" fill-opacity="0.75"/>
+  <circle cx="376" cy="136" r="38" fill="#A3E635"/>
+  <path d="M360 137L371 148L394 122" stroke="#050509" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="256" y="438" text-anchor="middle" font-family="Arial, sans-serif" font-size="46" font-weight="800" fill="#FAFAFA">CampusX</text>
+  <defs>
+    <radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 64) rotate(90) scale(448)">
+      <stop stop-color="#8B5CF6" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#11111A"/>
+      <stop offset="1" stop-color="#050509"/>
+    </radialGradient>
+  </defs>
+</svg>
